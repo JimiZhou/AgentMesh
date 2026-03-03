@@ -1,0 +1,289 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AgentMesh</title>
+  <style>
+    :root{
+      --bg:#0b0f19;
+      --panel:#0f172a;
+      --panel2:#0b1224;
+      --text:#e5e7eb;
+      --muted:#94a3b8;
+      --border:rgba(148,163,184,.22);
+      --accent:#22c55e;
+      --danger:#ef4444;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+      background: radial-gradient(1200px 600px at 20% 0%, rgba(34,197,94,.10), transparent 60%), var(--bg);
+      color:var(--text);
+    }
+    .wrap{max-width:980px;margin:0 auto;padding:28px 18px 60px}
+    .top{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:18px}
+    .brand{display:flex;align-items:center;gap:10px}
+    .logo{width:28px;height:28px;border-radius:8px;background:linear-gradient(135deg,rgba(34,197,94,.9),rgba(59,130,246,.9));box-shadow:0 10px 30px rgba(34,197,94,.12)}
+    h1{font-size:18px;letter-spacing:.2px;margin:0}
+    .sub{font-size:12px;color:var(--muted);margin-top:2px}
+    .pill{font-size:12px;color:var(--muted);border:1px solid var(--border);padding:6px 10px;border-radius:999px;background:rgba(15,23,42,.55)}
+    .grid{display:grid;grid-template-columns:1fr;gap:14px}
+    @media (min-width: 920px){.grid{grid-template-columns:1fr 1fr}}
+    .card{
+      border:1px solid var(--border);
+      background:linear-gradient(180deg, rgba(15,23,42,.85), rgba(11,18,36,.75));
+      border-radius:14px;
+      padding:16px;
+      box-shadow:0 10px 35px rgba(0,0,0,.35);
+    }
+    .card h2{font-size:14px;margin:0 0 10px 0;color:#f1f5f9}
+    .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+    .field{display:flex;flex-direction:column;gap:6px;min-width:220px;flex:1}
+    label{font-size:12px;color:var(--muted)}
+    input,select,textarea{
+      width:100%;
+      background:rgba(2,6,23,.55);
+      border:1px solid var(--border);
+      color:var(--text);
+      padding:10px 10px;
+      border-radius:10px;
+      outline:none;
+    }
+    input:focus,select:focus,textarea:focus{border-color:rgba(34,197,94,.55);box-shadow:0 0 0 3px rgba(34,197,94,.12)}
+    button{
+      background:rgba(34,197,94,.95);
+      border:1px solid rgba(34,197,94,.7);
+      color:#052e16;
+      font-weight:600;
+      padding:10px 12px;
+      border-radius:10px;
+      cursor:pointer;
+    }
+    button.secondary{background:transparent;border:1px solid var(--border);color:var(--text)}
+    button.danger{background:rgba(239,68,68,.95);border-color:rgba(239,68,68,.7);color:#450a0a}
+    button:disabled{opacity:.55;cursor:not-allowed}
+    .hint{font-size:12px;color:var(--muted);margin-top:8px;line-height:1.45}
+    pre{
+      margin:10px 0 0 0;
+      background:rgba(2,6,23,.55);
+      border:1px solid var(--border);
+      padding:12px;
+      border-radius:12px;
+      overflow:auto;
+      color:#cbd5e1;
+      font-size:12px;
+      line-height:1.45;
+      max-height:320px;
+    }
+    .ok{color:var(--accent)}
+    .bad{color:var(--danger)}
+    a{color:#93c5fd;text-decoration:none}
+    a:hover{text-decoration:underline}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="top">
+      <div class="brand">
+        <div class="logo" aria-hidden="true"></div>
+        <div>
+          <h1>AgentMesh Gateway</h1>
+          <div class="sub">最小原型，先跑通闭环</div>
+        </div>
+      </div>
+      <div class="pill" id="healthPill">health: unknown</div>
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <h2>Runner 注册</h2>
+        <div class="row">
+          <div class="field">
+            <label>runner name</label>
+            <input id="runnerName" placeholder="比如 mac-mini" />
+          </div>
+          <div>
+            <label style="visibility:hidden">action</label>
+            <button id="btnRegister">Register</button>
+          </div>
+        </div>
+        <div class="hint">注册成功会返回 runnerToken。这个 token 先当共享密钥用，后面再升级成更严谨的认证。</div>
+        <pre id="registerOut"></pre>
+      </div>
+
+      <div class="card">
+        <h2>Runners 列表</h2>
+        <div class="row">
+          <button class="secondary" id="btnRefreshRunners">Refresh</button>
+        </div>
+        <pre id="runnersOut"></pre>
+      </div>
+
+      <div class="card">
+        <h2>Projects</h2>
+        <div class="row">
+          <div class="field">
+            <label>project name</label>
+            <input id="projectName" placeholder="比如 demo" />
+          </div>
+          <div class="field">
+            <label>runnerId (可选)</label>
+            <input id="projectRunnerId" placeholder="绑定到某个 runner" />
+          </div>
+          <div>
+            <label style="visibility:hidden">action</label>
+            <button id="btnCreateProject">Create</button>
+          </div>
+        </div>
+        <div class="row" style="margin-top:10px">
+          <button class="secondary" id="btnRefreshProjects">Refresh</button>
+        </div>
+        <pre id="projectsOut"></pre>
+      </div>
+
+      <div class="card">
+        <h2>Sessions (占位)</h2>
+        <div class="row">
+          <div class="field">
+            <label>runnerId</label>
+            <input id="sessionRunnerId" placeholder="必填" />
+          </div>
+          <div class="field">
+            <label>projectId</label>
+            <input id="sessionProjectId" placeholder="必填" />
+          </div>
+          <div class="field">
+            <label>tool</label>
+            <select id="sessionTool">
+              <option value="codex">codex</option>
+              <option value="claude">claude</option>
+              <option value="gemini">gemini</option>
+            </select>
+          </div>
+          <div>
+            <label style="visibility:hidden">action</label>
+            <button id="btnCreateSession">Create</button>
+          </div>
+        </div>
+        <div class="row" style="margin-top:10px">
+          <button class="secondary" id="btnRefreshSessions">Refresh</button>
+        </div>
+        <pre id="sessionsOut"></pre>
+      </div>
+    </div>
+
+    <div class="hint" style="margin-top:18px">
+      目前这个页面只是测试台。后面会替换成真正的项目视图、文件树和终端流。
+    </div>
+  </div>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+
+  async function api(method, path, body){
+    const res = await fetch(path, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    const text = await res.text();
+    let data;
+    try { data = JSON.parse(text); }
+    catch { data = { raw: text }; }
+    if(!res.ok) throw Object.assign(new Error('HTTP '+res.status), { data });
+    return data;
+  }
+
+  function pretty(x){
+    try { return JSON.stringify(x, null, 2); }
+    catch { return String(x); }
+  }
+
+  async function refreshHealth(){
+    try{
+      const h = await api('GET','/health');
+      $('healthPill').textContent = 'health: ok';
+      $('healthPill').className = 'pill ok';
+      return h;
+    }catch(e){
+      $('healthPill').textContent = 'health: bad';
+      $('healthPill').className = 'pill bad';
+    }
+  }
+
+  async function refreshRunners(){
+    const data = await api('GET','/api/runners');
+    $('runnersOut').textContent = pretty(data);
+  }
+
+  async function refreshProjects(){
+    const data = await api('GET','/api/projects');
+    $('projectsOut').textContent = pretty(data);
+  }
+
+  async function refreshSessions(){
+    const data = await api('GET','/api/sessions');
+    $('sessionsOut').textContent = pretty(data);
+  }
+
+  $('btnRegister').onclick = async () => {
+    $('btnRegister').disabled = true;
+    $('registerOut').textContent = '';
+    try{
+      const name = $('runnerName').value.trim();
+      const data = await api('POST','/api/runners/register',{ name });
+      $('registerOut').textContent = pretty(data);
+      await refreshRunners();
+    }catch(e){
+      $('registerOut').textContent = pretty(e.data || { error: e.message });
+    }finally{
+      $('btnRegister').disabled = false;
+    }
+  };
+
+  $('btnRefreshRunners').onclick = () => refreshRunners();
+  $('btnRefreshProjects').onclick = () => refreshProjects();
+  $('btnRefreshSessions').onclick = () => refreshSessions();
+
+  $('btnCreateProject').onclick = async () => {
+    $('btnCreateProject').disabled = true;
+    try{
+      const name = $('projectName').value.trim();
+      const runnerId = $('projectRunnerId').value.trim();
+      const data = await api('POST','/api/projects', { name, runnerId: runnerId || undefined });
+      await refreshProjects();
+      $('projectsOut').textContent = pretty(data) + "\n\n" + $('projectsOut').textContent;
+    }catch(e){
+      $('projectsOut').textContent = pretty(e.data || { error: e.message });
+    }finally{
+      $('btnCreateProject').disabled = false;
+    }
+  };
+
+  $('btnCreateSession').onclick = async () => {
+    $('btnCreateSession').disabled = true;
+    try{
+      const runnerId = $('sessionRunnerId').value.trim();
+      const projectId = $('sessionProjectId').value.trim();
+      const tool = $('sessionTool').value;
+      const data = await api('POST','/api/sessions', { runnerId, projectId, tool });
+      await refreshSessions();
+      $('sessionsOut').textContent = pretty(data) + "\n\n" + $('sessionsOut').textContent;
+    }catch(e){
+      $('sessionsOut').textContent = pretty(e.data || { error: e.message });
+    }finally{
+      $('btnCreateSession').disabled = false;
+    }
+  };
+
+  (async () => {
+    await refreshHealth();
+    await refreshRunners();
+    await refreshProjects();
+    await refreshSessions();
+  })();
+</script>
+</body>
+</html>

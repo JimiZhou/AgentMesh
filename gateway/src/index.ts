@@ -14,6 +14,12 @@ const store = new JsonStore(DATA_FILE);
 
 app.get('/health', async () => ({ ok: true, name: 'agentmesh-gateway', ts: Date.now() }));
 
+app.get('/', async (_req, reply) => {
+  const { readFileSync } = await import('node:fs');
+  const html = readFileSync(new URL('./ui.html', import.meta.url), 'utf-8');
+  reply.type('text/html; charset=utf-8').send(html);
+});
+
 app.post('/api/runners/register', async (req, reply) => {
   const body = (req.body || {}) as any;
   const id = nanoid(12);

@@ -29,6 +29,13 @@
     h1{font-size:18px;letter-spacing:.2px;margin:0}
     .sub{font-size:12px;color:var(--muted);margin-top:2px}
     .pill{font-size:12px;color:var(--muted);border:1px solid var(--border);padding:6px 10px;border-radius:999px;background:rgba(15,23,42,.55)}
+    .dot{width:10px;height:10px;border-radius:999px;display:inline-block;flex:0 0 auto}
+    .dot.on{background:rgba(34,197,94,.95);box-shadow:0 0 0 4px rgba(34,197,94,.12)}
+    .dot.off{background:rgba(148,163,184,.45)}
+    .runnerRow{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 10px;border:1px solid var(--border);border-radius:12px;background:rgba(2,6,23,.35)}
+    .runnerMeta{display:flex;flex-direction:column;gap:2px}
+    .runnerName{font-size:13px;color:#e2e8f0}
+    .runnerSub{font-size:12px;color:var(--muted)}
     .grid{display:grid;grid-template-columns:1fr;gap:14px}
     @media (min-width: 920px){.grid{grid-template-columns:1fr 1fr}}
     .card{
@@ -118,6 +125,7 @@
         <div class="row">
           <button class="secondary" id="btnRefreshRunners">Refresh</button>
         </div>
+        <div id="runnersList" style="margin-top:10px; display:flex; flex-direction:column; gap:8px"></div>
         <pre id="runnersOut"></pre>
       </div>
 
@@ -216,6 +224,47 @@
   async function refreshRunners(){
     const data = await api('GET','/api/runners');
     $('runnersOut').textContent = pretty(data);
+
+    const list = $('runnersList');
+    list.innerHTML = '';
+    const runners = (data && data.runners) ? data.runners : [];
+    if(!runners.length){
+      list.innerHTML = '<div class="hint">暂无 runner</div>';
+      return;
+    }
+    for(const r of runners){
+      const row = document.createElement('div');
+      row.className = 'runnerRow';
+      const left = document.createElement('div');
+      left.style.display='flex';
+      left.style.alignItems='center';
+      left.style.gap='10px';
+
+      const dot = document.createElement('span');
+      dot.className = 'dot ' + (r.online ? 'on' : 'off');
+
+      const meta = document.createElement('div');
+      meta.className='runnerMeta';
+      const nm = document.createElement('div');
+      nm.className='runnerName';
+      nm.textContent = r.name || r.id;
+      const sub = document.createElement('div');
+      sub.className='runnerSub';
+      sub.textContent = 'id: ' + r.id + (r.lastSeenAt ? (' | lastSeen: ' + new Date(r.lastSeenAt).toLocaleString()) : '');
+      meta.appendChild(nm);
+      meta.appendChild(sub);
+
+      left.appendChild(dot);
+      left.appendChild(meta);
+
+      const right = document.createElement('div');
+      right.className='runnerSub';
+      right.textContent = r.online ? 'online' : 'offline';
+
+      row.appendChild(left);
+      row.appendChild(right);
+      list.appendChild(row);
+    }
   }
 
   async function refreshProjects(){

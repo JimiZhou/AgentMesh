@@ -12,6 +12,9 @@ await app.register(websocket);
 
 const store = new JsonStore(DATA_FILE);
 
+// Ephemeral online tracking (WS-connected runners)
+const runnerOnline = new Set<string>();
+
 app.get('/health', async () => ({ ok: true, name: 'agentmesh-gateway', ts: Date.now() }));
 
 app.get('/', async (_req, reply) => {
@@ -41,7 +44,13 @@ app.post('/api/runners/register', async (req, reply) => {
 
 app.get('/api/runners', async () => {
   const s = store.get();
-  return { ok: true, runners: Object.values(s.runners).map(({ token, ...rest }) => rest) };
+  return {
+    ok: true,
+    runners: Object.values(s.runners).map(({ token, ...rest }) => ({
+      ...rest,
+      online: runnerOnline.has(rest.id),
+    })),
+  };
 });
 
 app.post('/api/projects', async (req) => {
@@ -83,7 +92,12 @@ app.get('/ws/runner', { websocket: true }, (conn, req) => {
     if (s.runners[runnerId]) s.runners[runnerId].lastSeenAt = Date.now();
   });
 
+  runnerOnline.add(runnerId);
   conn.socket.send(JSON.stringify({ type: 'hello', runnerId, ts: Date.now() }));
+
+  conn.socket.on('close', () => {
+    runnerOnline.delete(runnerId);
+  });
 
   conn.socket.on('message', (buf: any) => {
     try {

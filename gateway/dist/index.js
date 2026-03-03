@@ -8,7 +8,14 @@ const DATA_FILE = process.env.AGENTMESH_DATA_FILE || new URL('../data/state.json
 const app = Fastify({ logger: true });
 await app.register(websocket);
 const store = new JsonStore(DATA_FILE);
+// Ephemeral online tracking (WS-connected runners)
+const runnerOnline = new Set();
 app.get('/health', async () => ({ ok: true, name: 'agentmesh-gateway', ts: Date.now() }));
+app.get('/', async (_req, reply) => {
+    const { readFileSync } = await import('node:fs');
+    const html = readFileSync(new URL('./ui.html', import.meta.url), 'utf-8');
+    reply.type('text/html; charset=utf-8').send(html);
+});
 app.post('/api/runners/register', async (req, reply) => {
     const body = (req.body || {});
     const id = nanoid(12);
@@ -27,7 +34,13 @@ app.post('/api/runners/register', async (req, reply) => {
 });
 app.get('/api/runners', async () => {
     const s = store.get();
-    return { ok: true, runners: Object.values(s.runners).map(({ token, ...rest }) => rest) };
+    return {
+        ok: true,
+        runners: Object.values(s.runners).map(({ token, ...rest }) => ({
+            ...rest,
+            online: runnerOnline.has(rest.id),
+        })),
+    };
 });
 app.post('/api/projects', async (req) => {
     const body = (req.body || {});
@@ -55,15 +68,19 @@ app.get('/ws/runner', { websocket: true }, (conn, req) => {
     const token = url.searchParams.get('token') || '';
     const runner = store.get().runners[runnerId];
     if (!runner || runner.token !== token) {
-        conn.socket.close(1008, 'unauthorized');
+        conn.close(1008, 'unauthorized');
         return;
     }
     store.patch((s) => {
         if (s.runners[runnerId])
             s.runners[runnerId].lastSeenAt = Date.now();
     });
-    conn.socket.send(JSON.stringify({ type: 'hello', runnerId, ts: Date.now() }));
-    conn.socket.on('message', (buf) => {
+    runnerOnline.add(runnerId);
+    conn.send(JSON.stringify({ type: 'hello', runnerId, ts: Date.now() }));
+    conn.on('close', () => {
+        runnerOnline.delete(runnerId);
+    });
+    conn.on('message', (buf) => {
         try {
             const msg = JSON.parse(buf.toString());
             if (msg?.type === 'capabilities') {

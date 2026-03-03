@@ -84,7 +84,7 @@ app.get('/ws/runner', { websocket: true }, (conn, req) => {
 
   const runner = store.get().runners[runnerId];
   if (!runner || runner.token !== token) {
-    conn.socket.close(1008, 'unauthorized');
+    conn.close(1008, 'unauthorized');
     return;
   }
 
@@ -93,13 +93,13 @@ app.get('/ws/runner', { websocket: true }, (conn, req) => {
   });
 
   runnerOnline.add(runnerId);
-  conn.socket.send(JSON.stringify({ type: 'hello', runnerId, ts: Date.now() }));
+  conn.send(JSON.stringify({ type: 'hello', runnerId, ts: Date.now() }));
 
-  conn.socket.on('close', () => {
+  conn.on('close', () => {
     runnerOnline.delete(runnerId);
   });
 
-  conn.socket.on('message', (buf: any) => {
+  conn.on('message', (buf: any) => {
     try {
       const msg = JSON.parse(buf.toString());
       if (msg?.type === 'capabilities') {

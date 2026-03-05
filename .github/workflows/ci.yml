@@ -1,0 +1,48 @@
+name: ci
+
+on:
+  push:
+    branches:
+      - '**'
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        project: [gateway, runner]
+    defaults:
+      run:
+        working-directory: ${{ matrix.project }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: ${{ matrix.project }}/package-lock.json
+      - run: npm ci
+      - run: npm run build
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install gateway deps
+        working-directory: gateway
+        run: npm ci
+      - name: Install runner deps
+        working-directory: runner
+        run: npm ci
+      - name: Build gateway
+        working-directory: gateway
+        run: npm run build
+      - name: Build runner
+        working-directory: runner
+        run: npm run build
+      - name: Run integration tests
+        run: node --test tests/*.test.mjs

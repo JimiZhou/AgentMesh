@@ -162,6 +162,7 @@ type TerminalGrant = {
 };
 
 const terminalGrants = new Map<string, TerminalGrant>();
+const loginAttempts = new Map<string, { count: number; firstTs: number; blockedUntil: number }>();
 
 type EnrollTokenRecord = {
   token: string;
@@ -180,6 +181,9 @@ const RUNNER_WS_BACKPRESSURE_LIMIT = 512 * 1024;
 const TERMINAL_WS_BACKPRESSURE_LIMIT = 512 * 1024;
 const TERMINAL_WS_HARD_LIMIT = 2 * 1024 * 1024;
 const TERMINAL_DROP_LOG_EVERY = 256;
+const LOGIN_WINDOW_MS = Number(process.env.AGENTMESH_LOGIN_WINDOW_MS || 10 * 60 * 1000);
+const LOGIN_MAX_ATTEMPTS = Number(process.env.AGENTMESH_LOGIN_MAX_ATTEMPTS || 10);
+const LOGIN_BLOCK_MS = Number(process.env.AGENTMESH_LOGIN_BLOCK_MS || 15 * 60 * 1000);
 
 // Ephemeral online tracking (WS-connected runners)
 const runnerOnline = new Set<string>();
@@ -463,6 +467,39 @@ function getWebSessionFromRequest(req: any): WebSession | null {
 
 function touchWebSession(session: WebSession): void {
   session.expiresAt = Date.now() + cfgWebSessionTtlMs();
+}
+
+function getLoginClientKey(req: any): string {
+  return String(req.ip || req.socket?.remoteAddress || 'unknown').trim() || 'unknown';
+}
+
+function isLoginRateLimited(req: any): boolean {
+  const key = getLoginClientKey(req);
+  const now = Date.now();
+  const attempt = loginAttempts.get(key);
+  if (!attempt) return false;
+  if (attempt.blockedUntil > now) return true;
+  if (attempt.blockedUntil > 0 || now - attempt.firstTs > LOGIN_WINDOW_MS) {
+    loginAttempts.delete(key);
+  }
+  return false;
+}
+
+function noteLoginFailure(req: any): void {
+  const key = getLoginClientKey(req);
+  const now = Date.now();
+  const attempt = loginAttempts.get(key);
+  if (!attempt || now - attempt.firstTs > LOGIN_WINDOW_MS) {
+    loginAttempts.set(key, { count: 1, firstTs: now, blockedUntil: 0 });
+    return;
+  }
+  const nextCount = attempt.count + 1;
+  const blockedUntil = nextCount >= LOGIN_MAX_ATTEMPTS ? now + LOGIN_BLOCK_MS : 0;
+  loginAttempts.set(key, { count: nextCount, firstTs: attempt.firstTs, blockedUntil });
+}
+
+function clearLoginFailures(req: any): void {
+  loginAttempts.delete(getLoginClientKey(req));
 }
 
 function requireSessionAccess(session: SessionRecord, user: string): boolean {
@@ -996,6 +1033,12 @@ app.get('/assets/*', async (req, reply) => {
 });
 
 app.post('/api/auth/login', async (req, reply) => {
+  if (isLoginRateLimited(req)) {
+    metrics.authFailures += 1;
+    reply.code(429);
+    return { ok: false, error: 'too many login attempts, please retry later' };
+  }
+
   const body = (req.body || {}) as any;
   const username = typeof body.username === 'string' ? body.username.trim() : '';
   const password = typeof body.password === 'string' ? body.password : '';
@@ -1005,6 +1048,7 @@ app.post('/api/auth/login', async (req, reply) => {
 
   if (username !== cfgWebUser() || password !== cfgWebPassword()) {
     metrics.authFailures += 1;
+    noteLoginFailure(req);
     reply.code(401);
     return { ok: false, error: 'invalid credentials' };
   }
@@ -1020,11 +1064,13 @@ app.post('/api/auth/login', async (req, reply) => {
     }
     if (!totpVerify(totpSecret, totp, 1, 30)) {
       metrics.authFailures += 1;
+      noteLoginFailure(req);
       reply.code(401);
       return { ok: false, error: 'invalid totp' };
     }
   }
 
+  clearLoginFailures(req);
   const session = createWebSession(username);
   webSessions.set(session.id, session);
   setAuthCookie(req, reply, session.id, session.expiresAt);

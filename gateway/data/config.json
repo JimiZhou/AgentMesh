@@ -1,0 +1,21 @@
+{
+  "web": {
+    "user": "admin",
+    "password": "agentmesh",
+    "sessionTtlMs": 43200000,
+    "totp": {
+      "issuer": "AgentMesh",
+      "secretBase32": "",
+      "enabled": false,
+      "provisioned": false
+    },
+    "allowedOrigins": []
+  },
+  "enroll": {
+    "tokenTtlMs": 600000
+  },
+  "publicUrls": {
+    "http": "",
+    "ws": ""
+  }
+}

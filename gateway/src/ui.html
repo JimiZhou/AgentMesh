@@ -4,335 +4,2057 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>AgentMesh</title>
+  <link rel="icon" href="data:," />
+  <link rel="stylesheet" href="/assets/xterm/xterm.css" />
   <style>
-    :root{
-      --bg:#0b0f19;
-      --panel:#0f172a;
-      --panel2:#0b1224;
-      --text:#e5e7eb;
-      --muted:#94a3b8;
-      --border:rgba(148,163,184,.22);
-      --accent:#22c55e;
-      --danger:#ef4444;
+    :root {
+      --font-sans: "Space Grotesk", "Avenir Next", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+      --font-mono: "JetBrains Mono", "SFMono-Regular", Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      --bg: #e8eff4;
+      --bg-deep: #dbe5ee;
+      --panel: rgba(255, 255, 255, 0.66);
+      --panel-strong: rgba(255, 255, 255, 0.86);
+      --line: rgba(8, 33, 53, 0.14);
+      --line-strong: rgba(8, 33, 53, 0.24);
+      --text: #0c2238;
+      --muted: rgba(12, 34, 56, 0.62);
+      --ok: #059669;
+      --warn: #d97706;
+      --danger: #dc2626;
+      --accent: #0369a1;
+      --accent-alt: #0f766e;
+      --glow-cyan: rgba(34, 211, 238, 0.33);
+      --glow-blue: rgba(59, 130, 246, 0.28);
+      --glow-amber: rgba(245, 158, 11, 0.20);
+      --shadow-lg: 0 32px 76px rgba(13, 33, 52, 0.16);
+      --shadow-md: 0 16px 36px rgba(13, 33, 52, 0.12);
+      --shadow-sm: 0 8px 24px rgba(13, 33, 52, 0.09);
+      --radius: 22px;
     }
-    *{box-sizing:border-box}
-    body{
-      margin:0;
-      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
-      background: radial-gradient(1200px 600px at 20% 0%, rgba(34,197,94,.10), transparent 60%), var(--bg);
-      color:var(--text);
+
+    html[data-theme="dark"] {
+      --bg: #06101b;
+      --bg-deep: #0b1627;
+      --panel: rgba(10, 20, 34, 0.66);
+      --panel-strong: rgba(13, 25, 42, 0.86);
+      --line: rgba(148, 163, 184, 0.24);
+      --line-strong: rgba(148, 163, 184, 0.36);
+      --text: #dbeafe;
+      --muted: rgba(219, 234, 254, 0.62);
+      --ok: #34d399;
+      --warn: #f59e0b;
+      --danger: #f87171;
+      --accent: #38bdf8;
+      --accent-alt: #5eead4;
+      --glow-cyan: rgba(45, 212, 191, 0.27);
+      --glow-blue: rgba(59, 130, 246, 0.25);
+      --glow-amber: rgba(251, 191, 36, 0.15);
+      --shadow-lg: 0 30px 75px rgba(0, 0, 0, 0.40);
+      --shadow-md: 0 16px 36px rgba(0, 0, 0, 0.34);
+      --shadow-sm: 0 10px 25px rgba(0, 0, 0, 0.26);
     }
-    .wrap{max-width:980px;margin:0 auto;padding:28px 18px 60px}
-    .top{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:18px}
-    .brand{display:flex;align-items:center;gap:10px}
-    .logo{width:28px;height:28px;border-radius:8px;background:linear-gradient(135deg,rgba(34,197,94,.9),rgba(59,130,246,.9));box-shadow:0 10px 30px rgba(34,197,94,.12)}
-    h1{font-size:18px;letter-spacing:.2px;margin:0}
-    .sub{font-size:12px;color:var(--muted);margin-top:2px}
-    .pill{font-size:12px;color:var(--muted);border:1px solid var(--border);padding:6px 10px;border-radius:999px;background:rgba(15,23,42,.55)}
-    .dot{width:10px;height:10px;border-radius:999px;display:inline-block;flex:0 0 auto}
-    .dot.on{background:rgba(34,197,94,.95);box-shadow:0 0 0 4px rgba(34,197,94,.12)}
-    .dot.off{background:rgba(148,163,184,.45)}
-    .runnerRow{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 10px;border:1px solid var(--border);border-radius:12px;background:rgba(2,6,23,.35)}
-    .runnerMeta{display:flex;flex-direction:column;gap:2px}
-    .runnerName{font-size:13px;color:#e2e8f0}
-    .runnerSub{font-size:12px;color:var(--muted)}
-    .grid{display:grid;grid-template-columns:1fr;gap:14px}
-    @media (min-width: 920px){.grid{grid-template-columns:1fr 1fr}}
-    .card{
-      border:1px solid var(--border);
-      background:linear-gradient(180deg, rgba(15,23,42,.85), rgba(11,18,36,.75));
-      border-radius:14px;
-      padding:16px;
-      box-shadow:0 10px 35px rgba(0,0,0,.35);
+
+    * {
+      box-sizing: border-box;
     }
-    .card h2{font-size:14px;margin:0 0 10px 0;color:#f1f5f9}
-    .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
-    .field{display:flex;flex-direction:column;gap:6px;min-width:220px;flex:1}
-    label{font-size:12px;color:var(--muted)}
-    input,select,textarea{
-      width:100%;
-      background:rgba(2,6,23,.55);
-      border:1px solid var(--border);
-      color:var(--text);
-      padding:10px 10px;
-      border-radius:10px;
-      outline:none;
+
+    html,
+    body {
+      margin: 0;
+      height: 100%;
+      min-height: 100%;
+      color: var(--text);
+      font-family: var(--font-sans);
+      background:
+        radial-gradient(1300px circle at 10% -15%, var(--glow-cyan), transparent 56%),
+        radial-gradient(1000px circle at 88% 8%, var(--glow-blue), transparent 58%),
+        radial-gradient(960px circle at 52% 112%, var(--glow-amber), transparent 62%),
+        linear-gradient(160deg, var(--bg) 0%, var(--bg-deep) 100%);
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
     }
-    input:focus,select:focus,textarea:focus{border-color:rgba(34,197,94,.55);box-shadow:0 0 0 3px rgba(34,197,94,.12)}
-    button{
-      background:rgba(34,197,94,.95);
-      border:1px solid rgba(34,197,94,.7);
-      color:#052e16;
-      font-weight:600;
-      padding:10px 12px;
-      border-radius:10px;
-      cursor:pointer;
+
+    body {
+      position: relative;
+      overflow-x: hidden;
+      letter-spacing: 0.01em;
     }
-    button.secondary{background:transparent;border:1px solid var(--border);color:var(--text)}
-    button.danger{background:rgba(239,68,68,.95);border-color:rgba(239,68,68,.7);color:#450a0a}
-    button:disabled{opacity:.55;cursor:not-allowed}
-    .hint{font-size:12px;color:var(--muted);margin-top:8px;line-height:1.45}
-    pre{
-      margin:10px 0 0 0;
-      background:rgba(2,6,23,.55);
-      border:1px solid var(--border);
-      padding:12px;
-      border-radius:12px;
-      overflow:auto;
-      color:#cbd5e1;
-      font-size:12px;
-      line-height:1.45;
-      max-height:320px;
+
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background-image:
+        linear-gradient(rgba(8, 33, 53, 0.038) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(8, 33, 53, 0.038) 1px, transparent 1px);
+      background-size: 34px 34px;
+      opacity: 0.38;
+      mix-blend-mode: soft-light;
+      z-index: 0;
     }
-    .ok{color:var(--accent)}
-    .bad{color:var(--danger)}
-    a{color:#93c5fd;text-decoration:none}
-    a:hover{text-decoration:underline}
+
+    .atmosphere {
+      position: fixed;
+      inset: 0;
+      overflow: hidden;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .orb {
+      position: absolute;
+      border-radius: 999px;
+      filter: blur(22px);
+      opacity: 0.85;
+      transform: translate3d(0, 0, 0);
+    }
+
+    .orb-cyan {
+      width: min(56vw, 680px);
+      height: min(56vw, 680px);
+      left: -12vw;
+      top: -18vh;
+      background: radial-gradient(circle at 45% 45%, rgba(34, 211, 238, 0.42) 0%, rgba(34, 211, 238, 0.10) 46%, transparent 74%);
+      animation: orbFloatA 22s ease-in-out infinite alternate;
+    }
+
+    .orb-blue {
+      width: min(48vw, 600px);
+      height: min(48vw, 600px);
+      right: -8vw;
+      top: 10vh;
+      background: radial-gradient(circle at 40% 40%, rgba(37, 99, 235, 0.35) 0%, rgba(37, 99, 235, 0.09) 48%, transparent 75%);
+      animation: orbFloatB 26s ease-in-out infinite alternate;
+    }
+
+    .orb-amber {
+      width: min(44vw, 560px);
+      height: min(44vw, 560px);
+      left: 26vw;
+      bottom: -18vh;
+      background: radial-gradient(circle at 48% 48%, rgba(245, 158, 11, 0.24) 0%, rgba(245, 158, 11, 0.07) 52%, transparent 78%);
+      animation: orbFloatC 24s ease-in-out infinite alternate;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    .app {
+      position: relative;
+      z-index: 1;
+      min-height: 100vh;
+      padding:
+        calc(28px + env(safe-area-inset-top, 0px))
+        clamp(14px, 3vw, 30px)
+        calc(28px + env(safe-area-inset-bottom, 0px));
+    }
+
+    .view {
+      animation: viewIn 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
+    }
+
+    .panel {
+      position: relative;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: linear-gradient(160deg, var(--panel-strong), var(--panel));
+      box-shadow: var(--shadow-md);
+      backdrop-filter: blur(16px) saturate(160%);
+      overflow: hidden;
+    }
+
+    .panel::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background: linear-gradient(120deg, rgba(255, 255, 255, 0.26), transparent 38%, transparent 62%, rgba(255, 255, 255, 0.18));
+      opacity: 0.52;
+    }
+
+    .row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .muted {
+      color: var(--muted);
+    }
+
+    .pill {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 6px 11px;
+      font-size: 12px;
+      color: var(--muted);
+      background: rgba(255, 255, 255, 0.46);
+      backdrop-filter: blur(8px);
+    }
+
+    .pill.ok {
+      color: var(--ok);
+      border-color: rgba(5, 150, 105, 0.34);
+      background: rgba(5, 150, 105, 0.13);
+    }
+
+    .pill.warn {
+      color: var(--warn);
+      border-color: rgba(217, 119, 6, 0.34);
+      background: rgba(217, 119, 6, 0.13);
+    }
+
+    h1,
+    h2,
+    h3,
+    p {
+      margin: 0;
+      position: relative;
+      z-index: 1;
+    }
+
+    h1,
+    h2 {
+      letter-spacing: -0.02em;
+    }
+
+    h3 {
+      letter-spacing: -0.01em;
+      font-size: 17px;
+    }
+
+    button,
+    input,
+    textarea,
+    select {
+      font: inherit;
+    }
+
+    input,
+    textarea,
+    select {
+      width: 100%;
+      min-height: 44px;
+      background: rgba(255, 255, 255, 0.62);
+      border: 1px solid var(--line);
+      color: var(--text);
+      border-radius: 14px;
+      outline: none;
+      padding: 12px 14px;
+      transition: border-color 160ms ease, box-shadow 160ms ease, background 160ms ease;
+    }
+
+    input::placeholder,
+    textarea::placeholder {
+      color: var(--muted);
+    }
+
+    input:focus,
+    textarea:focus,
+    select:focus {
+      border-color: rgba(3, 105, 161, 0.58);
+      background: rgba(255, 255, 255, 0.86);
+      box-shadow: 0 0 0 4px rgba(3, 105, 161, 0.16);
+    }
+
+    button {
+      position: relative;
+      border: 1px solid rgba(2, 87, 131, 0.28);
+      border-radius: 14px;
+      padding: 11px 16px;
+      min-height: 44px;
+      background: linear-gradient(135deg, #0f766e 0%, #0369a1 58%, #075985 100%);
+      color: #f8fbff;
+      font-weight: 700;
+      cursor: pointer;
+      box-shadow: var(--shadow-sm);
+      transition: transform 180ms ease, box-shadow 180ms ease, opacity 180ms ease, border-color 180ms ease;
+      isolation: isolate;
+    }
+
+    button::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      pointer-events: none;
+      background: linear-gradient(120deg, rgba(255, 255, 255, 0.42), transparent 38%, transparent 70%, rgba(255, 255, 255, 0.18));
+      opacity: 0.45;
+      z-index: -1;
+    }
+
+    button:hover {
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-md);
+    }
+
+    button.secondary {
+      background: rgba(255, 255, 255, 0.58);
+      border-color: var(--line);
+      color: var(--text);
+      font-weight: 640;
+      box-shadow: none;
+    }
+
+    button.secondary::before {
+      opacity: 0.18;
+      z-index: 0;
+    }
+
+    button.secondary:hover {
+      border-color: var(--line-strong);
+      box-shadow: var(--shadow-sm);
+    }
+
+    button.danger {
+      background: linear-gradient(135deg, #dc2626, #b91c1c);
+      border-color: rgba(220, 38, 38, 0.56);
+      color: #fff;
+    }
+
+    button:disabled {
+      opacity: 0.54;
+      cursor: not-allowed;
+      transform: none;
+      box-shadow: none;
+    }
+
+    .field {
+      display: grid;
+      gap: 8px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .field label {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 560;
+      letter-spacing: 0.01em;
+    }
+
+    .error {
+      margin-top: 10px;
+      min-height: 18px;
+      color: #c2410c;
+      font-size: 13px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .login-wrap {
+      min-height: calc(100dvh - 56px);
+      display: grid;
+      place-items: center;
+    }
+
+    .login-card {
+      width: min(560px, 96vw);
+      padding: clamp(24px, 3vw, 38px);
+      display: grid;
+      gap: 11px;
+      box-shadow: var(--shadow-lg);
+    }
+
+    .login-card::before {
+      content: "";
+      position: absolute;
+      inset: -1px;
+      pointer-events: none;
+      background: radial-gradient(420px circle at 78% -18%, rgba(34, 211, 238, 0.28), transparent 58%);
+      opacity: 0.9;
+    }
+
+    .eyebrow {
+      position: relative;
+      z-index: 1;
+      display: inline-flex;
+      width: fit-content;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.10em;
+      text-transform: uppercase;
+      color: #075985;
+      background: rgba(3, 105, 161, 0.12);
+      border: 1px solid rgba(3, 105, 161, 0.26);
+      border-radius: 999px;
+      padding: 5px 10px;
+    }
+
+    .login-title {
+      font-size: clamp(34px, 4.2vw, 44px);
+      line-height: 1;
+      margin-top: 2px;
+    }
+
+    .login-sub {
+      font-size: 14px;
+      max-width: 44ch;
+      line-height: 1.55;
+    }
+
+    .logo {
+      width: 52px;
+      height: 52px;
+      border-radius: 16px;
+      background: linear-gradient(145deg, rgba(3, 105, 161, 0.16), rgba(15, 118, 110, 0.14));
+      border: 1px solid rgba(3, 105, 161, 0.24);
+      box-shadow: var(--shadow-sm);
+      display: grid;
+      place-items: center;
+      margin-bottom: 4px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .logo svg {
+      width: 24px;
+      height: 24px;
+      color: var(--text);
+      opacity: 0.9;
+    }
+
+    .view-wrap {
+      max-width: 1220px;
+      margin: 0 auto;
+      display: grid;
+      gap: 16px;
+    }
+
+    .header-card {
+      padding: 16px 18px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .runner-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(294px, 1fr));
+      gap: 14px;
+      align-items: stretch;
+    }
+
+    .runner-card {
+      position: relative;
+      padding: 16px;
+      display: grid;
+      gap: 10px;
+      cursor: pointer;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.72), rgba(255, 255, 255, 0.58));
+      box-shadow: var(--shadow-sm);
+      transition: border-color 180ms ease, transform 180ms ease, box-shadow 180ms ease, background 220ms ease;
+      text-align: left;
+      color: var(--text);
+      animation: cardIn 460ms cubic-bezier(0.22, 1, 0.36, 1) both;
+      animation-delay: calc(var(--stagger, 0) * 34ms);
+    }
+
+    .runner-card::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      pointer-events: none;
+      border: 1px solid transparent;
+      transition: border-color 180ms ease;
+    }
+
+    .runner-card:hover {
+      border-color: rgba(3, 105, 161, 0.36);
+      transform: translateY(-4px);
+      box-shadow: var(--shadow-md);
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.82), rgba(255, 255, 255, 0.68));
+    }
+
+    .runner-card:hover::after {
+      border-color: rgba(15, 118, 110, 0.25);
+    }
+
+    .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 999px;
+      flex: 0 0 auto;
+      display: inline-block;
+      margin-top: 1px;
+    }
+
+    .dot.on {
+      background: var(--ok);
+      box-shadow: 0 0 0 5px rgba(5, 150, 105, 0.20);
+    }
+
+    .dot.off {
+      background: rgba(8, 33, 53, 0.28);
+      box-shadow: 0 0 0 5px rgba(8, 33, 53, 0.07);
+    }
+
+    .runner-id {
+      display: none;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--muted);
+      word-break: break-all;
+    }
+
+    .tools {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .tool-badge {
+      font-size: 12px;
+      border-radius: 999px;
+      padding: 5px 10px;
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.56);
+      color: var(--text);
+      font-weight: 700;
+      letter-spacing: 0.02em;
+    }
+
+    .empty {
+      border: 1px dashed var(--line);
+      border-radius: 14px;
+      padding: 14px;
+      color: var(--muted);
+      background: rgba(255, 255, 255, 0.48);
+      font-size: 13px;
+    }
+
+    .detail-grid {
+      display: grid;
+      grid-template-columns: minmax(280px, 370px) 1fr;
+      gap: 14px;
+      align-items: start;
+    }
+
+    .detail-card {
+      padding: 14px;
+      display: grid;
+      gap: 12px;
+    }
+
+    .cap-box {
+      margin: 0;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: rgba(4, 25, 42, 0.90);
+      padding: 10px;
+      max-height: 300px;
+      overflow: auto;
+      font-size: 12px;
+      line-height: 1.45;
+      color: #bfdbfe;
+      font-family: var(--font-mono);
+    }
+
+    .session-list {
+      display: grid;
+      gap: 9px;
+    }
+
+    .session-item {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.52);
+      padding: 11px;
+      display: grid;
+      gap: 8px;
+      animation: cardIn 460ms cubic-bezier(0.22, 1, 0.36, 1) both;
+      animation-delay: calc(var(--stagger, 0) * 28ms);
+    }
+
+    .session-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .session-id {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--text);
+      word-break: break-all;
+    }
+
+    .session-meta {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      flex-wrap: wrap;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .status-badge {
+      font-size: 11px;
+      border-radius: 999px;
+      border: 1px solid transparent;
+      padding: 4px 8px;
+      text-transform: lowercase;
+      font-weight: 700;
+    }
+
+    .status-running,
+    .status-starting {
+      color: #047857;
+      border-color: rgba(5, 150, 105, 0.30);
+      background: rgba(5, 150, 105, 0.13);
+    }
+
+    .status-created,
+    .status-stopping {
+      color: #b45309;
+      border-color: rgba(217, 119, 6, 0.30);
+      background: rgba(217, 119, 6, 0.13);
+    }
+
+    .status-exited,
+    .status-ended,
+    .status-error {
+      color: #b91c1c;
+      border-color: rgba(220, 38, 38, 0.30);
+      background: rgba(220, 38, 38, 0.13);
+    }
+
+    .session-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .terminal-layout {
+      height: calc(100dvh - 56px);
+      max-width: 1440px;
+      margin: 0 auto;
+      display: grid;
+      gap: 12px;
+      grid-template-rows: auto 1fr;
+    }
+
+    .terminal-head {
+      padding: 12px 14px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .terminal-card {
+      min-height: 0;
+      padding: 12px;
+      display: grid;
+      gap: 10px;
+      grid-template-rows: 1fr auto;
+    }
+
+    .term-host {
+      border: 1px solid rgba(3, 105, 161, 0.28);
+      border-radius: 16px;
+      overflow: hidden;
+      background: linear-gradient(180deg, #011627, #021221);
+      min-height: 0;
+      height: 100%;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), var(--shadow-sm);
+    }
+
+    .term-hint {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .basic-wrap {
+      height: 100%;
+      display: grid;
+      grid-template-rows: 1fr auto;
+      min-height: 0;
+    }
+
+    .basic-out {
+      margin: 0;
+      padding: 10px;
+      overflow: auto;
+      white-space: pre-wrap;
+      word-break: break-word;
+      color: #dbeafe;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      line-height: 1.45;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.22);
+    }
+
+    .basic-in {
+      border: 0;
+      border-radius: 0;
+      background: rgba(2, 6, 23, 0.58);
+      color: #e2e8f0;
+      resize: vertical;
+      min-height: 70px;
+      max-height: 180px;
+      font-family: var(--font-mono);
+    }
+
+    #riskBanner {
+      border-radius: 16px;
+      box-shadow: var(--shadow-sm);
+    }
+
+    #modalMask {
+      background: rgba(3, 22, 40, 0.38) !important;
+      backdrop-filter: blur(8px);
+    }
+
+    #modalMask > div {
+      background: linear-gradient(160deg, var(--panel-strong), var(--panel)) !important;
+      border-color: var(--line) !important;
+      border-radius: 20px !important;
+      box-shadow: var(--shadow-lg) !important;
+    }
+
+    @keyframes viewIn {
+      from {
+        opacity: 0;
+        transform: translateY(8px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    @keyframes cardIn {
+      from {
+        opacity: 0;
+        transform: translateY(8px) scale(0.99);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+    }
+
+    @keyframes orbFloatA {
+      from { transform: translate3d(0, 0, 0) scale(1); }
+      to { transform: translate3d(4vw, 5vh, 0) scale(1.08); }
+    }
+
+    @keyframes orbFloatB {
+      from { transform: translate3d(0, 0, 0) scale(1); }
+      to { transform: translate3d(-5vw, -3vh, 0) scale(1.06); }
+    }
+
+    @keyframes orbFloatC {
+      from { transform: translate3d(0, 0, 0) scale(1); }
+      to { transform: translate3d(3vw, -5vh, 0) scale(1.10); }
+    }
+
+    @media (max-width: 980px) {
+      .detail-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 780px) {
+      .app {
+        padding:
+          calc(10px + env(safe-area-inset-top, 0px))
+          10px
+          calc(10px + env(safe-area-inset-bottom, 0px));
+      }
+
+      .login-wrap {
+        min-height: calc(100dvh - 20px);
+      }
+
+      .login-card {
+        width: min(620px, 100%);
+        padding: 20px 16px;
+      }
+
+      .header-card {
+        padding: 13px 12px;
+      }
+
+      .header-card .row {
+        width: 100%;
+      }
+
+      .header-card .row button {
+        flex: 1 1 calc(50% - 6px);
+      }
+
+      .runner-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .terminal-layout {
+        height: calc(100dvh - 20px);
+      }
+
+      .terminal-head {
+        padding: 11px;
+      }
+
+      .terminal-head .row {
+        width: 100%;
+      }
+
+      .terminal-head .row button {
+        flex: 1 1 calc(33.333% - 8px);
+      }
+
+      .terminal-card {
+        padding: 10px;
+      }
+
+      .term-host {
+        min-height: 56dvh;
+      }
+
+      .session-actions button {
+        flex: 1 1 auto;
+      }
+
+      #modalMask > div {
+        width: min(560px, 100%) !important;
+        padding: 14px !important;
+      }
+    }
+
+    @media (max-width: 520px) {
+      .header-card .row button,
+      .terminal-head .row button {
+        flex: 1 1 100%;
+      }
+
+      .session-meta {
+        display: grid;
+        gap: 5px;
+      }
+
+      .session-head {
+        align-items: flex-start;
+      }
+    }
+
+    @media (hover: none) {
+      .runner-card:hover {
+        transform: none;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *,
+      *::before,
+      *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+      }
+    }
   </style>
 </head>
 <body>
-  <div class="wrap">
-    <div class="top">
-      <div class="brand">
-        <div class="logo" aria-hidden="true"></div>
-        <div>
-          <h1>AgentMesh Gateway</h1>
-          <div class="sub">最小原型，先跑通闭环</div>
+  <div class="atmosphere" aria-hidden="true">
+    <span class="orb orb-cyan"></span>
+    <span class="orb orb-blue"></span>
+    <span class="orb orb-amber"></span>
+  </div>
+  <div class="app">
+    <section id="loginView" class="view">
+      <div class="login-wrap">
+        <div class="login-card panel">
+          <div class="logo" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <path d="M12 2.5c2.1 0 3.8 1.7 3.8 3.8 0 1.3-.7 2.5-1.7 3.2 1.7.6 2.9 2.2 2.9 4.1 0 2.4-1.9 4.3-4.3 4.3H9.3C6.9 21.9 5 20 5 17.6c0-1.9 1.2-3.5 2.9-4.1-1-.7-1.7-1.9-1.7-3.2C6.2 4.2 7.9 2.5 10 2.5h2z" stroke="currentColor" stroke-width="1.6" opacity="0.9"/>
+              <path d="M8.4 10.1h7.2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+              <path d="M8.4 14h7.2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+            </svg>
+          </div>
+          <div class="eyebrow">Cloud Agent Control</div>
+          <h1 class="login-title">AgentMesh</h1>
+          <p class="muted login-sub">登录后展示在线/离线 runner，点进后管理会话并进入终端。</p>
+
+          <form id="loginForm">
+            <div class="field" style="margin-top:16px">
+              <label for="authUser">用户名</label>
+              <input id="authUser" autocomplete="username" value="admin" />
+            </div>
+            <div class="field" style="margin-top:12px">
+              <label for="authPassword">密码</label>
+              <input id="authPassword" type="password" autocomplete="current-password" placeholder="输入网关密码" />
+            </div>
+            <div class="field hidden" id="authTotpField" style="margin-top:12px">
+              <label for="authTotp">动态码</label>
+              <input id="authTotp" inputmode="numeric" autocomplete="one-time-code" placeholder="输入 6 位动态码" />
+            </div>
+            <div style="margin-top:14px">
+              <button id="btnLogin" type="submit" style="width:100%">登录</button>
+            </div>
+          </form>
+
+          <div id="loginError" class="error"></div>
         </div>
       </div>
-      <div class="pill" id="healthPill">health: unknown</div>
-    </div>
+    </section>
 
-    <div class="grid">
-      <div class="card">
-        <h2>Runner 注册</h2>
-        <div class="row">
+    <section id="workspaceView" class="view hidden">
+      <div class="view-wrap">
+        <header class="header-card panel">
+          <div>
+            <h2 style="letter-spacing:-0.4px">AgentMesh 控制台</h2>
+            <div class="muted" id="runnerSummaryText">-</div>
+          </div>
+          <div class="row">
+            <span class="pill" id="authBadge">未登录</span>
+            <button class="secondary" id="btnOpenSettings">设置</button>
+            <button class="secondary" id="btnRefreshRunners">刷新</button>
+            <button class="secondary" id="btnLogout">退出</button>
+          </div>
+        </header>
+
+        <div id="riskBanner" class="panel hidden" style="padding:12px 14px;border-color:rgba(217,119,6,0.22);background:rgba(217,119,6,0.08);color:rgba(124,45,18,0.92)">
+          未配置两步验证，存在风险。
+        </div>
+
+        <div id="cleanupResult" class="muted" style="font-size:13px"></div>
+        <main id="runnerList" class="runner-grid"></main>
+      </div>
+    </section>
+
+    <section id="settingsView" class="view hidden">
+      <div class="view-wrap">
+        <header class="header-card panel">
+          <div>
+            <h2 style="letter-spacing:-0.4px">控制台设置</h2>
+            <div class="muted" id="settingsSub">-</div>
+          </div>
+          <div class="row">
+            <button class="secondary" id="btnBackFromSettings">返回</button>
+          </div>
+        </header>
+
+        <section class="detail-card panel">
+          <h3>账号与密码</h3>
           <div class="field">
-            <label>runner name</label>
-            <input id="runnerName" placeholder="比如 mac-mini" />
+            <label for="setNewUser">新用户名 (可选)</label>
+            <input id="setNewUser" placeholder="留空表示不修改" />
+          </div>
+          <div class="field">
+            <label for="setNewPassword">新密码 (可选)</label>
+            <input id="setNewPassword" type="password" placeholder="留空表示不修改" />
+          </div>
+          <div class="field">
+            <label for="setOldPassword">当前密码 (必填)</label>
+            <input id="setOldPassword" type="password" placeholder="用于确认身份" />
+          </div>
+          <button id="btnSaveAuth">保存并重新登录</button>
+          <div id="saveAuthResult" class="muted" style="font-size:12px"></div>
+        </section>
+
+        <section class="detail-card panel">
+          <h3>两步验证 (TOTP)</h3>
+          <div class="muted" id="totpStatus" style="font-size:13px">-</div>
+          <div class="row" style="margin-top:8px">
+            <button class="secondary" id="btnTotpEnable">去绑定</button>
+            <button class="danger hidden" id="btnTotpDisable">删除两步验证</button>
+          </div>
+          <div id="totpActionResult" class="muted" style="font-size:12px"></div>
+        </section>
+      </div>
+    </section>
+
+    <section id="runnerDetailView" class="view hidden">
+      <div class="view-wrap">
+        <header class="header-card panel">
+          <div>
+            <h2 id="detailRunnerTitle">Runner</h2>
+            <div class="muted" id="detailRunnerSub">-</div>
+          </div>
+          <div class="row">
+            <button class="secondary" id="btnBackToRunners">返回在线列表</button>
+            <button class="secondary" id="btnRefreshDetail">刷新详情</button>
+          </div>
+        </header>
+
+        <div class="detail-grid">
+          <section class="detail-card panel">
+            <h3>Runner 能力</h3>
+            <div id="detailTools" class="tools"></div>
+            <pre id="detailCapabilities" class="cap-box hidden"></pre>
+
+            <h3>新建会话</h3>
+            <div class="field">
+              <label for="newSessionTool">CLI Agent</label>
+              <select id="newSessionTool">
+                <option value="codex">codex</option>
+                <option value="claude">claude</option>
+                <option value="gemini">gemini</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="newSessionPath">project path (可选)</label>
+              <input id="newSessionPath" placeholder="留空时使用 runner 默认工作目录" />
+            </div>
+            <div class="field">
+              <label for="newSessionProjectName">project name (可选)</label>
+              <input id="newSessionProjectName" placeholder="例如 my-workspace" />
+            </div>
+            <button id="btnCreateSession">创建会话</button>
+            <div id="createSessionResult" class="muted" style="font-size:12px"></div>
+          </section>
+
+          <section class="detail-card panel">
+            <h3>历史会话</h3>
+            <div id="detailSessionSummary" class="muted" style="font-size:13px">-</div>
+            <div id="detailSessionList" class="session-list"></div>
+          </section>
+        </div>
+      </div>
+    </section>
+
+    <section id="terminalView" class="view hidden">
+      <div class="terminal-layout">
+        <header class="terminal-head panel">
+          <div class="row">
+            <button class="secondary" id="btnBackFromTerminal">返回</button>
+            <button class="secondary" id="btnTermReconnect">重连</button>
+            <button class="danger" id="btnTermDisconnect">断开</button>
           </div>
           <div>
-            <label style="visibility:hidden">action</label>
-            <button id="btnRegister">Register</button>
+            <h2 id="termTitle" style="font-size:15px">Terminal</h2>
+            <div id="termMeta" class="muted" style="font-size:12px">session: -</div>
           </div>
-        </div>
-        <div class="hint">注册成功会返回 runnerToken。这个 token 先当共享密钥用，后面再升级成更严谨的认证。</div>
-        <pre id="registerOut"></pre>
-      </div>
+        </header>
 
-      <div class="card">
-        <h2>Runners 列表</h2>
-        <div class="row">
-          <button class="secondary" id="btnRefreshRunners">Refresh</button>
+        <div class="terminal-card panel">
+          <div id="termHost" class="term-host"></div>
+          <div id="termHint" class="term-hint">Web terminal 已接入 xterm 本地资源，目标交互与本地终端保持一致。</div>
         </div>
-        <div id="runnersList" style="margin-top:10px; display:flex; flex-direction:column; gap:8px"></div>
-        <pre id="runnersOut"></pre>
       </div>
+    </section>
+  </div>
 
-      <div class="card">
-        <h2>Projects</h2>
-        <div class="row">
-          <div class="field">
-            <label>project name</label>
-            <input id="projectName" placeholder="比如 demo" />
-          </div>
-          <div class="field">
-            <label>runnerId (可选)</label>
-            <input id="projectRunnerId" placeholder="绑定到某个 runner" />
-          </div>
-          <div>
-            <label style="visibility:hidden">action</label>
-            <button id="btnCreateProject">Create</button>
-          </div>
-        </div>
-        <div class="row" style="margin-top:10px">
-          <button class="secondary" id="btnRefreshProjects">Refresh</button>
-        </div>
-        <pre id="projectsOut"></pre>
+  <div id="modalMask" class="hidden" style="position:fixed;inset:0;background:rgba(15,23,42,0.45);display:flex;align-items:center;justify-content:center;padding:18px;z-index:9999">
+    <div class="panel" style="width:min(520px,96vw);padding:16px 16px 14px 16px">
+      <div id="modalTitle" style="font-weight:800;font-size:14px;letter-spacing:-0.2px">提示</div>
+      <div id="modalBody" class="muted" style="margin-top:8px;line-height:1.5"></div>
+      <div id="modalFields" style="margin-top:12px;display:grid;gap:10px"></div>
+      <div class="row" style="margin-top:14px;justify-content:flex-end">
+        <button class="secondary" id="modalCancel">取消</button>
+        <button id="modalOk">确认</button>
       </div>
-
-      <div class="card">
-        <h2>Sessions (占位)</h2>
-        <div class="row">
-          <div class="field">
-            <label>runnerId</label>
-            <input id="sessionRunnerId" placeholder="必填" />
-          </div>
-          <div class="field">
-            <label>projectId</label>
-            <input id="sessionProjectId" placeholder="必填" />
-          </div>
-          <div class="field">
-            <label>tool</label>
-            <select id="sessionTool">
-              <option value="codex">codex</option>
-              <option value="claude">claude</option>
-              <option value="gemini">gemini</option>
-            </select>
-          </div>
-          <div>
-            <label style="visibility:hidden">action</label>
-            <button id="btnCreateSession">Create</button>
-          </div>
-        </div>
-        <div class="row" style="margin-top:10px">
-          <button class="secondary" id="btnRefreshSessions">Refresh</button>
-        </div>
-        <pre id="sessionsOut"></pre>
-      </div>
-    </div>
-
-    <div class="hint" style="margin-top:18px">
-      目前这个页面只是测试台。后面会替换成真正的项目视图、文件树和终端流。
     </div>
   </div>
 
-<script>
-  const $ = (id) => document.getElementById(id);
+  <script src="/assets/xterm/xterm.js"></script>
+  <script src="/assets/xterm/xterm-addon-fit.js"></script>
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const termEncoder = new TextEncoder();
+    const termDecoder = new TextDecoder();
 
-  async function api(method, path, body){
-    const res = await fetch(path, {
-      method,
-      headers: { 'Content-Type': 'application/json' },
-      body: body ? JSON.stringify(body) : undefined,
-    });
-    const text = await res.text();
-    let data;
-    try { data = JSON.parse(text); }
-    catch { data = { raw: text }; }
-    if(!res.ok) throw Object.assign(new Error('HTTP '+res.status), { data });
-    return data;
-  }
+    const state = {
+      view: 'login',
+      returnView: 'runnerDetail',
+      auth: {
+        authenticated: false,
+        user: '',
+        csrfToken: '',
+        expiresAt: 0,
+      },
+      runnersAll: [],
+      runnerSummary: { total: 0, online: 0, offline: 0, returned: 0 },
+      selectedRunnerId: '',
+      runnerDetail: null,
+      activeSession: null,
+      autoRefreshTimer: null,
+    };
 
-  function pretty(x){
-    try { return JSON.stringify(x, null, 2); }
-    catch { return String(x); }
-  }
-
-  async function refreshHealth(){
-    try{
-      const h = await api('GET','/health');
-      $('healthPill').textContent = 'health: ok';
-      $('healthPill').className = 'pill ok';
-      return h;
-    }catch(e){
-      $('healthPill').textContent = 'health: bad';
-      $('healthPill').className = 'pill bad';
+    function modalHide() {
+      $('modalMask').classList.add('hidden');
+      $('modalTitle').textContent = '';
+      $('modalBody').textContent = '';
+      $('modalFields').innerHTML = '';
+      $('modalOk').onclick = null;
+      $('modalCancel').onclick = null;
     }
-  }
 
-  async function refreshRunners(){
-    const data = await api('GET','/api/runners');
-    $('runnersOut').textContent = pretty(data);
+    function modalShow(opts) {
+      const title = (opts && opts.title) ? String(opts.title) : '提示';
+      const body = (opts && opts.body) ? String(opts.body) : '';
+      const okText = (opts && opts.okText) ? String(opts.okText) : '确认';
+      const cancelText = (opts && opts.cancelText) ? String(opts.cancelText) : '取消';
+      const fields = Array.isArray(opts && opts.fields) ? opts.fields : [];
 
-    const list = $('runnersList');
-    list.innerHTML = '';
-    const runners = (data && data.runners) ? data.runners : [];
-    if(!runners.length){
-      list.innerHTML = '<div class="hint">暂无 runner</div>';
+      $('modalTitle').textContent = title;
+      $('modalBody').textContent = body;
+      $('modalFields').innerHTML = '';
+
+      const values = {};
+      for (const f of fields) {
+        const wrap = document.createElement('div');
+        wrap.className = 'field';
+        const label = document.createElement('label');
+        label.textContent = f.label || '';
+        const input = document.createElement('input');
+        input.placeholder = f.placeholder || '';
+        if (f.type) input.type = f.type;
+        if (f.inputmode) input.setAttribute('inputmode', f.inputmode);
+        if (f.autocomplete) input.setAttribute('autocomplete', f.autocomplete);
+        input.oninput = () => { values[f.key] = input.value; };
+        values[f.key] = '';
+        wrap.appendChild(label);
+        wrap.appendChild(input);
+        $('modalFields').appendChild(wrap);
+        setTimeout(() => input.focus(), 0);
+      }
+
+      $('modalOk').textContent = okText;
+      $('modalCancel').textContent = cancelText;
+
+      $('modalCancel').onclick = () => {
+        modalHide();
+        if (opts && typeof opts.onCancel === 'function') opts.onCancel();
+      };
+
+      $('modalOk').onclick = async () => {
+        if (opts && typeof opts.onOk === 'function') {
+          await opts.onOk(values);
+        }
+        modalHide();
+      };
+
+      $('modalMask').classList.remove('hidden');
+    }
+
+    const DEFAULT_TERM_COLS = 120;
+    const DEFAULT_TERM_ROWS = 34;
+    const BASIC_TERM_MAX_CHARS = 200000;
+
+    let termMode = 'none';
+    let term = null;
+    let fitAddon = null;
+    let basicOut = null;
+    let termWs = null;
+
+    function showView(next) {
+      state.view = next;
+      $('loginView').classList.toggle('hidden', next !== 'login');
+      $('workspaceView').classList.toggle('hidden', next !== 'workspace');
+      $('settingsView').classList.toggle('hidden', next !== 'settings');
+      $('runnerDetailView').classList.toggle('hidden', next !== 'runnerDetail');
+      $('terminalView').classList.toggle('hidden', next !== 'terminal');
+
+      if (next !== 'terminal') disconnectTerminal(false);
+      ensureAutoRefresh();
+    }
+
+    function ensureAutoRefresh() {
+      if (state.autoRefreshTimer) {
+        clearInterval(state.autoRefreshTimer);
+        state.autoRefreshTimer = null;
+      }
+      if (!state.auth.authenticated || state.view === 'terminal' || state.view === 'settings') return;
+
+      state.autoRefreshTimer = setInterval(() => {
+        if (state.view === 'workspace') {
+          refreshRunnerList(false).catch(() => {});
+          return;
+        }
+        if (state.view === 'runnerDetail' && state.selectedRunnerId) {
+          refreshRunnerDetail(false).catch(() => {});
+        }
+      }, 6000);
+    }
+
+    function setAuth(authPayload) {
+      state.auth.authenticated = !!(authPayload && authPayload.authenticated);
+      state.auth.user = authPayload && authPayload.user ? authPayload.user : '';
+      state.auth.csrfToken = authPayload && authPayload.csrfToken ? authPayload.csrfToken : '';
+      state.auth.expiresAt = Number(authPayload && authPayload.expiresAt ? authPayload.expiresAt : 0);
+      $('authBadge').textContent = state.auth.authenticated ? ('user: ' + state.auth.user) : '未登录';
+    }
+
+    function setLoginTotpMode(enabled) {
+      const on = !!enabled;
+      $('authTotpField').classList.toggle('hidden', !on);
+      if (!on) {
+        $('authTotp').value = '';
+      }
+      $('btnLogin').textContent = on ? '验证并登录' : '登录';
+    }
+
+    function resetAuth() {
+      setAuth({ authenticated: false, user: '', csrfToken: '', expiresAt: 0 });
+      state.runnersAll = [];
+      state.runnerDetail = null;
+      state.selectedRunnerId = '';
+      state.activeSession = null;
+      setLoginTotpMode(false);
+    }
+
+    async function api(method, path, body) {
+      const m = String(method || 'GET').toUpperCase();
+      const headers = {};
+      const hasBody = body !== undefined && body !== null;
+      if (hasBody) {
+        headers['Content-Type'] = 'application/json';
+      }
+      if ((m === 'POST' || m === 'PUT' || m === 'PATCH' || m === 'DELETE') && state.auth.csrfToken) {
+        headers['X-AgentMesh-CSRF'] = state.auth.csrfToken;
+      }
+
+      const res = await fetch(path, {
+        method: m,
+        headers,
+        body: hasBody ? JSON.stringify(body) : undefined,
+      });
+
+      const raw = await res.text();
+      let data;
+      try { data = JSON.parse(raw); }
+      catch { data = { raw }; }
+
+      if (!res.ok) {
+        const err = Object.assign(new Error('HTTP ' + res.status), { status: res.status, data });
+        if (res.status === 401 && !path.startsWith('/api/auth/')) {
+          resetAuth();
+          showView('login');
+        }
+        throw err;
+      }
+      return data;
+    }
+
+    function toolLabel(tool) {
+      const t = String(tool || '').toLowerCase();
+      if (t === 'codex') return 'Codex';
+      if (t === 'claude') return 'Claude';
+      if (t === 'gemini') return 'Gemini';
+      return (tool || 'Unknown');
+    }
+
+    function prettyTime(ts) {
+      const n = Number(ts || 0);
+      if (!n) return '-';
+      try { return new Date(n).toLocaleString(); }
+      catch { return '-'; }
+    }
+
+    function toolsFromCapabilities(capabilities) {
+      const tools = capabilities && capabilities.tools ? capabilities.tools : {};
+      return Object.keys(tools).filter((k) => !!tools[k]);
+    }
+
+    function renderRunnerList() {
+      const host = $('runnerList');
+      host.innerHTML = '';
+      $('runnerSummaryText').textContent =
+        '在线 ' + state.runnerSummary.online + ' 台 · 离线 ' + state.runnerSummary.offline + ' 台 · 总计 ' + state.runnerSummary.total + ' 台';
+
+      if (!state.runnersAll.length) {
+        const empty = document.createElement('div');
+        empty.className = 'empty';
+        empty.textContent = '当前没有 runner。';
+        host.appendChild(empty);
+        return;
+      }
+
+      const all = [...state.runnersAll];
+      all.sort((a, b) => {
+        const ao = a.online ? 1 : 0;
+        const bo = b.online ? 1 : 0;
+        if (ao !== bo) return bo - ao;
+        return Number(b.lastSeenAt || 0) - Number(a.lastSeenAt || 0);
+      });
+
+      for (const [idx, runner] of all.entries()) {
+        const card = document.createElement('button');
+        card.className = 'runner-card';
+        card.style.setProperty('--stagger', String(idx));
+
+        const top = document.createElement('div');
+        top.className = 'row';
+        const dot = document.createElement('span');
+        dot.className = 'dot ' + (runner.online ? 'on' : 'off');
+        const title = document.createElement('strong');
+        title.textContent = runner.name || runner.id;
+        top.appendChild(dot);
+        top.appendChild(title);
+
+        const rid = document.createElement('div');
+        rid.className = 'runner-id';
+        rid.textContent = 'runnerId: ' + runner.id;
+        // runnerId is intentionally hidden by CSS (not needed for normal ops).
+
+        const tools = document.createElement('div');
+        tools.className = 'tools';
+        const toolList = toolsFromCapabilities(runner.capabilities);
+        if (!toolList.length) {
+          const badge = document.createElement('span');
+          badge.className = 'tool-badge';
+          badge.textContent = 'UNKNOWN';
+          tools.appendChild(badge);
+        } else {
+          for (const t of toolList) {
+            const badge = document.createElement('span');
+            badge.className = 'tool-badge';
+            badge.textContent = toolLabel(t);
+            tools.appendChild(badge);
+          }
+        }
+
+        const meta = document.createElement('div');
+        meta.className = 'muted';
+        meta.style.fontSize = '12px';
+        meta.textContent = (runner.online ? '在线' : '离线') + ' · lastSeen ' + prettyTime(runner.lastSeenAt);
+
+        const actions = document.createElement('div');
+        actions.className = 'row';
+        actions.style.marginTop = '2px';
+
+        const btnOpen = document.createElement('button');
+        btnOpen.className = 'secondary';
+        btnOpen.textContent = '详情';
+        btnOpen.onclick = (ev) => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          openRunnerDetail(runner.id);
+        };
+
+        const btnDelete = document.createElement('button');
+        btnDelete.className = 'danger';
+        btnDelete.textContent = '删除';
+        btnDelete.onclick = (ev) => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          deleteRunner(runner.id);
+        };
+
+        actions.appendChild(btnOpen);
+        actions.appendChild(btnDelete);
+
+        card.appendChild(top);
+        card.appendChild(rid);
+        card.appendChild(tools);
+        card.appendChild(meta);
+        card.appendChild(actions);
+        card.onclick = () => openRunnerDetail(runner.id);
+        host.appendChild(card);
+      }
+    }
+
+    async function refreshRunnerList(showError = true) {
+      try {
+        const data = await api('GET', '/api/runners');
+        state.runnersAll = Array.isArray(data && data.runners) ? data.runners : [];
+        state.runnerSummary = data && data.summary ? data.summary : {
+          total: state.runnersAll.length,
+          online: state.runnersAll.filter((x) => x.online).length,
+          offline: state.runnersAll.filter((x) => !x.online).length,
+          returned: state.runnersAll.length,
+        };
+        renderRunnerList();
+      } catch (e) {
+        if (showError) {
+          const msg = String((e && e.data && e.data.error) || (e && e.message) || '刷新失败');
+          $('runnerList').innerHTML = '<div class="empty">加载失败: ' + msg + '</div>';
+        }
+      }
+    }
+
+    function renderRunnerDetail() {
+      const detail = state.runnerDetail;
+      if (!detail || !detail.runner) return;
+
+      const runner = detail.runner;
+      $('detailRunnerTitle').textContent = (runner.name || runner.id) + ' 详情';
+      $('detailRunnerSub').textContent =
+        (runner.online ? '在线' : '离线') +
+        ' · lastSeen ' + prettyTime(runner.lastSeenAt);
+
+      const toolsHost = $('detailTools');
+      toolsHost.innerHTML = '';
+      const tools = toolsFromCapabilities(runner.capabilities);
+      if (!tools.length) {
+        const badge = document.createElement('span');
+        badge.className = 'tool-badge';
+        badge.textContent = 'UNKNOWN';
+        toolsHost.appendChild(badge);
+      } else {
+        for (const t of tools) {
+          const badge = document.createElement('span');
+          badge.className = 'tool-badge';
+          badge.textContent = toolLabel(t);
+          toolsHost.appendChild(badge);
+        }
+      }
+
+      // Hide raw capabilities JSON in production-like UI.
+      $('detailCapabilities').textContent = '';
+      $('detailSessionSummary').textContent =
+        '总会话: ' + (detail.summary ? detail.summary.totalSessions : 0) +
+        ' | 活跃会话: ' + (detail.summary ? detail.summary.activeSessions : 0);
+
+      const host = $('detailSessionList');
+      host.innerHTML = '';
+      const sessions = Array.isArray(detail.sessions) ? detail.sessions : [];
+      if (!sessions.length) {
+        host.innerHTML = '<div class="empty">暂无会话，可在左侧创建新会话。</div>';
+        return;
+      }
+
+      for (const [idx, session] of sessions.entries()) {
+        const item = document.createElement('div');
+        item.className = 'session-item';
+        item.style.setProperty('--stagger', String(idx));
+
+        const head = document.createElement('div');
+        head.className = 'session-head';
+
+        const sid = document.createElement('span');
+        sid.className = 'session-id';
+        sid.textContent = session.id;
+
+        const tool = document.createElement('span');
+        tool.className = 'tool-badge';
+        tool.textContent = toolLabel(session.tool);
+
+        head.appendChild(sid);
+        head.appendChild(tool);
+
+        const meta = document.createElement('div');
+        meta.className = 'session-meta';
+
+        const statusBadge = document.createElement('span');
+        const status = String(session.status || 'created');
+        statusBadge.className = 'status-badge status-' + status;
+        statusBadge.textContent = status;
+
+        const created = document.createElement('span');
+        created.textContent = 'created: ' + prettyTime(session.createdAt);
+
+        const path = document.createElement('span');
+        path.textContent = 'path: ' + (session.projectPath || '-');
+
+        meta.appendChild(statusBadge);
+        meta.appendChild(created);
+        meta.appendChild(path);
+
+        const actions = document.createElement('div');
+        actions.className = 'session-actions';
+
+        const btnOpen = document.createElement('button');
+        btnOpen.className = 'secondary';
+        btnOpen.textContent = '进入 Terminal';
+        btnOpen.onclick = () => openSession(session);
+
+        const btnStop = document.createElement('button');
+        btnStop.className = 'secondary';
+        btnStop.textContent = '停止';
+        const runningLike = status === 'running' || status === 'starting' || status === 'stopping';
+        btnStop.disabled = !runningLike;
+        btnStop.onclick = () => stopSession(session.id);
+
+        const btnDelete = document.createElement('button');
+        btnDelete.className = 'danger';
+        btnDelete.textContent = '删除';
+        btnDelete.onclick = () => deleteSession(session.id);
+
+        actions.appendChild(btnOpen);
+        actions.appendChild(btnStop);
+        actions.appendChild(btnDelete);
+
+        item.appendChild(head);
+        item.appendChild(meta);
+        item.appendChild(actions);
+        host.appendChild(item);
+      }
+    }
+
+    async function refreshRunnerDetail(showError = true) {
+      const rid = state.selectedRunnerId;
+      if (!rid) return;
+      try {
+        const detail = await api('GET', '/api/runners/' + encodeURIComponent(rid));
+        state.runnerDetail = detail;
+        renderRunnerDetail();
+      } catch (e) {
+        const msg = String((e && e.data && e.data.error) || (e && e.message) || '加载 runner 详情失败');
+        if (showError) {
+          $('detailSessionList').innerHTML = '<div class="empty">' + msg + '</div>';
+        }
+        if (e && e.status === 404) {
+          showView('workspace');
+          refreshRunnerList(false).catch(() => {});
+        }
+      }
+    }
+
+    async function openRunnerDetail(runnerId) {
+      state.selectedRunnerId = runnerId;
+      $('createSessionResult').textContent = '';
+      showView('runnerDetail');
+      await refreshRunnerDetail(true);
+    }
+
+    async function createSessionForRunner() {
+      const rid = state.selectedRunnerId;
+      if (!rid) return;
+
+      $('btnCreateSession').disabled = true;
+      $('createSessionResult').textContent = '';
+      try {
+        const tool = $('newSessionTool').value;
+        const projectPath = $('newSessionPath').value.trim();
+        const projectName = $('newSessionProjectName').value.trim();
+        const body = {
+          tool,
+          projectPath: projectPath || undefined,
+          projectName: projectName || undefined,
+        };
+        const data = await api('POST', '/api/runners/' + encodeURIComponent(rid) + '/sessions', body);
+        $('createSessionResult').textContent = '创建成功: sessionId=' + data.sessionId;
+        $('newSessionProjectName').value = '';
+        await refreshRunnerDetail(false);
+      } catch (e) {
+        $('createSessionResult').textContent = String((e && e.data && e.data.error) || (e && e.message) || '创建失败');
+      } finally {
+        $('btnCreateSession').disabled = false;
+      }
+    }
+
+    async function stopSession(sessionId) {
+      try {
+        await api('POST', '/api/sessions/' + encodeURIComponent(sessionId) + '/stop', {});
+      } catch (e) {
+        window.alert(String((e && e.data && e.data.error) || (e && e.message) || '停止失败'));
+      }
+      setTimeout(() => refreshRunnerDetail(false).catch(() => {}), 250);
+    }
+
+    async function deleteSession(sessionId) {
+      const ok = window.confirm('确认删除会话 ' + sessionId + ' ? 运行中的会话会强制终止。');
+      if (!ok) return;
+      try {
+        await api('DELETE', '/api/sessions/' + encodeURIComponent(sessionId) + '?force=1');
+        await refreshRunnerDetail(false);
+      } catch (e) {
+        window.alert(String((e && e.data && e.data.error) || (e && e.message) || '删除失败'));
+      }
+    }
+
+    async function deleteRunner(runnerId) {
+      const ok = window.confirm('确认删除 runner ' + runnerId + ' ? 离线 runner 将直接移除；在线 runner 需要 force 删除。');
+      if (!ok) return;
+
+      try {
+        await api('DELETE', '/api/runners/' + encodeURIComponent(runnerId) + '?force=1');
+        $('cleanupResult').textContent = '已删除 runner: ' + runnerId;
+        if (state.selectedRunnerId === runnerId) {
+          state.selectedRunnerId = '';
+          state.runnerDetail = null;
+          showView('workspace');
+        }
+        await refreshRunnerList(false);
+      } catch (e) {
+        const msg = String((e && e.data && e.data.error) || (e && e.message) || '删除失败');
+        window.alert(msg);
+      }
+    }
+
+    function termWsUrl(sessionId, token) {
+      const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      return proto + '//' + location.host + '/ws/terminal?sessionId=' + encodeURIComponent(sessionId) + '&token=' + encodeURIComponent(token);
+    }
+
+    function getTermCols() {
+      return termMode === 'xterm' && term ? term.cols : DEFAULT_TERM_COLS;
+    }
+
+    function getTermRows() {
+      return termMode === 'xterm' && term ? term.rows : DEFAULT_TERM_ROWS;
+    }
+
+    function termReset() {
+      if (termMode === 'xterm' && term) {
+        term.reset();
+        return;
+      }
+      if (termMode === 'basic' && basicOut) basicOut.textContent = '';
+    }
+
+    function termWrite(text) {
+      const val = String(text || '');
+      if (termMode === 'xterm' && term) {
+        term.write(val);
+        return;
+      }
+      if (termMode === 'basic' && basicOut) {
+        const next = (basicOut.textContent || '') + val;
+        basicOut.textContent = next.length > BASIC_TERM_MAX_CHARS ? next.slice(-BASIC_TERM_MAX_CHARS) : next;
+        basicOut.scrollTop = basicOut.scrollHeight;
+      }
+    }
+
+    function sendTermInput(raw) {
+      if (!termWs || termWs.readyState !== 1) return;
+      const bytes = termEncoder.encode(String(raw || ''));
+      if (bytes.length) termWs.send(bytes);
+    }
+
+    function setupBasicTerminal() {
+      const host = $('termHost');
+      host.innerHTML = '';
+
+      const wrap = document.createElement('div');
+      wrap.className = 'basic-wrap';
+
+      const out = document.createElement('pre');
+      out.className = 'basic-out';
+
+      const input = document.createElement('textarea');
+      input.className = 'basic-in';
+      input.placeholder = 'basic terminal input: 键入、回车、退格、粘贴';
+
+      input.addEventListener('paste', (ev) => {
+        if (!termWs || termWs.readyState !== 1) return;
+        const text = (ev.clipboardData && ev.clipboardData.getData('text')) || '';
+        if (text) {
+          ev.preventDefault();
+          sendTermInput(text);
+        }
+      });
+
+      input.addEventListener('keydown', (ev) => {
+        if (!termWs || termWs.readyState !== 1) return;
+
+        if (ev.key === 'Enter') { ev.preventDefault(); sendTermInput('\r'); return; }
+        if (ev.key === 'Backspace') { ev.preventDefault(); sendTermInput('\x7f'); return; }
+        if (ev.key === 'Tab') { ev.preventDefault(); sendTermInput('\t'); return; }
+        if (ev.key === 'ArrowUp') { ev.preventDefault(); sendTermInput('\x1b[A'); return; }
+        if (ev.key === 'ArrowDown') { ev.preventDefault(); sendTermInput('\x1b[B'); return; }
+        if (ev.key === 'ArrowRight') { ev.preventDefault(); sendTermInput('\x1b[C'); return; }
+        if (ev.key === 'ArrowLeft') { ev.preventDefault(); sendTermInput('\x1b[D'); return; }
+
+        if (ev.ctrlKey && !ev.metaKey && !ev.altKey && ev.key && ev.key.length === 1) {
+          const upper = ev.key.toUpperCase();
+          const code = upper.charCodeAt(0);
+          if (code >= 65 && code <= 90) {
+            ev.preventDefault();
+            sendTermInput(String.fromCharCode(code - 64));
+            return;
+          }
+        }
+
+        if (!ev.ctrlKey && !ev.metaKey && !ev.altKey && ev.key && ev.key.length === 1) {
+          ev.preventDefault();
+          sendTermInput(ev.key);
+        }
+      });
+
+      wrap.appendChild(out);
+      wrap.appendChild(input);
+      host.appendChild(wrap);
+      basicOut = out;
+      termMode = 'basic';
+      termWrite('[basic terminal mode enabled]\r\n');
+    }
+
+    function initTerminal() {
+      const host = $('termHost');
+      host.innerHTML = '';
+
+      if (typeof Terminal === 'undefined' || typeof FitAddon === 'undefined' || !FitAddon.FitAddon) {
+        setupBasicTerminal();
+        return;
+      }
+
+      term = new Terminal({
+        cursorBlink: true,
+        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Courier New", monospace',
+        fontSize: 13,
+        theme: {
+          background: '#020617',
+          foreground: '#e2e8f0',
+        },
+        scrollback: 5000,
+      });
+      fitAddon = new FitAddon.FitAddon();
+      term.loadAddon(fitAddon);
+      term.open(host);
+      fitAddon.fit();
+      termMode = 'xterm';
+      term.onData((data) => sendTermInput(data));
+    }
+
+    function sendResize() {
+      if (!termWs || termWs.readyState !== 1) return;
+      if (termMode === 'xterm' && fitAddon) fitAddon.fit();
+      termWs.send(JSON.stringify({ type: 'resize', cols: getTermCols(), rows: getTermRows() }));
+    }
+
+    function bindResizeHooks() {
+      window.addEventListener('resize', () => sendResize());
+      if (typeof ResizeObserver !== 'undefined') {
+        const obs = new ResizeObserver(() => sendResize());
+        obs.observe($('termHost'));
+      }
+    }
+
+    function disconnectTerminal(showHint = true) {
+      if (termWs) {
+        try { termWs.close(); } catch {}
+      }
+      termWs = null;
+      if (showHint) termWrite('\r\n[disconnected]\r\n');
+    }
+
+    async function ensureSessionStarted(session) {
+      const sid = session.id;
+      const status = String(session.status || 'created');
+      if (status === 'running' || status === 'starting') return;
+
+      const started = await api('POST', '/api/sessions/' + encodeURIComponent(sid) + '/start', {
+        cols: getTermCols(),
+        rows: getTermRows(),
+        projectPath: session.projectPath || undefined,
+      });
+      if (started && started.status) session.status = started.status;
+    }
+
+    async function connectTerminal(sessionId) {
+      termReset();
+      termWrite('[connecting...]\r\n');
+
+      let token = '';
+      try {
+        const grant = await api('POST', '/api/sessions/' + encodeURIComponent(sessionId) + '/terminal-token', {});
+        token = String(grant && grant.token ? grant.token : '');
+      } catch (e) {
+        termWrite('[terminal token failed: ' + String((e && e.data && e.data.error) || (e && e.message) || 'unknown') + ']\r\n');
+        throw e;
+      }
+
+      if (!token) {
+        termWrite('[terminal token missing]\r\n');
+        return;
+      }
+
+      disconnectTerminal(false);
+      termWs = new WebSocket(termWsUrl(sessionId, token));
+      termWs.binaryType = 'arraybuffer';
+
+      termWs.onopen = () => {
+        termWrite('[connected]\r\n');
+        sendResize();
+        if (termMode === 'xterm' && term) term.focus();
+      };
+      termWs.onmessage = (ev) => {
+        if (ev.data instanceof ArrayBuffer) {
+          const text = termDecoder.decode(new Uint8Array(ev.data), { stream: true });
+          if (text) termWrite(text);
+          return;
+        }
+        if (typeof Blob !== 'undefined' && ev.data instanceof Blob) {
+          ev.data.arrayBuffer().then((ab) => {
+            const text = termDecoder.decode(new Uint8Array(ab), { stream: true });
+            if (text) termWrite(text);
+          }).catch(() => {});
+          return;
+        }
+        if (typeof ev.data === 'string') termWrite(ev.data);
+      };
+      termWs.onclose = () => termWrite('\r\n[disconnected]\r\n');
+      termWs.onerror = () => termWrite('\r\n[ws error]\r\n');
+    }
+
+    function updateTerminalHeader(session) {
+      $('termTitle').textContent = 'Session ' + session.id;
+      $('termMeta').textContent =
+        'runner=' + session.runnerId +
+        ' | tool=' + toolLabel(session.tool) +
+        ' | status=' + String(session.status || 'created');
+    }
+
+    async function openSession(session) {
+      const rid = session.runnerId;
+      const runner = state.runnersAll.find((x) => x.id === rid);
+      if (!runner || !runner.online) {
+        window.alert('当前 runner 离线，无法进入 terminal。');
+        return;
+      }
+
+      state.activeSession = { ...session };
+      state.returnView = 'runnerDetail';
+      showView('terminal');
+      updateTerminalHeader(state.activeSession);
+
+      try {
+        await ensureSessionStarted(state.activeSession);
+      } catch (e) {
+        termReset();
+        termWrite('[start session failed: ' + String((e && e.data && e.data.error) || (e && e.message) || 'unknown') + ']\r\n');
+        return;
+      }
+
+      updateTerminalHeader(state.activeSession);
+      await connectTerminal(state.activeSession.id);
+    }
+
+    async function refreshAuth() {
+      const me = await api('GET', '/api/auth/me');
+      setAuth(me);
+
+      try {
+        const risk = $('riskBanner');
+        const insecureDefault = me && me.security && me.security.defaultPassword;
+        const totpMissing = me && (me.totpEnabled === false || me.totpProvisioned === false);
+        const isRisk = me && me.authenticated && (insecureDefault || totpMissing);
+        risk.textContent = insecureDefault ? '默认账密未修改，存在风险。' : '未配置两步验证，存在风险。';
+        risk.classList.toggle('hidden', !isRisk);
+      } catch {}
+
+      return me;
+    }
+
+    async function refreshSettings() {
+      const s = await api('GET', '/api/admin/settings');
+      const totp = (s && s.web && s.web.totp) ? s.web.totp : {};
+      $('settingsSub').textContent = 'user: ' + (s && s.web && s.web.user ? s.web.user : '-') ;
+
+      const configured = !!(totp && totp.configured);
+      if (configured) {
+        $('totpStatus').textContent = '已配置两步验证。';
+        $('btnTotpDisable').classList.remove('hidden');
+        $('btnTotpEnable').classList.add('hidden');
+      } else {
+        $('totpStatus').textContent = '未配置两步验证：请先访问 /setup 绑定。';
+        $('btnTotpDisable').classList.add('hidden');
+        $('btnTotpEnable').classList.remove('hidden');
+      }
+      return s;
+    }
+
+    async function saveAuthSettings() {
+      $('btnSaveAuth').disabled = true;
+      $('saveAuthResult').textContent = '';
+      try {
+        const oldPassword = $('setOldPassword').value;
+        const newUser = $('setNewUser').value.trim();
+        const newPassword = $('setNewPassword').value;
+        const resp = await api('POST', '/api/admin/auth/change', { oldPassword, newUser, newPassword });
+        $('saveAuthResult').textContent = '已保存，需重新登录。';
+        if (resp && resp.relogin) {
+          await doLogout();
+        }
+      } catch (e) {
+        $('saveAuthResult').textContent = String((e && e.data && e.data.error) || (e && e.message) || '保存失败');
+      } finally {
+        $('btnSaveAuth').disabled = false;
+        try { $('setOldPassword').value = ''; $('setNewPassword').value = ''; } catch {}
+      }
+    }
+
+    async function totpAction(kind) {
+      $('totpActionResult').textContent = '';
+      if (kind === 'disable') {
+        modalShow({
+          title: '删除两步验证',
+          body: '删除两步验证会降低安全性，是否继续？',
+          okText: '继续删除',
+          cancelText: '取消',
+          fields: [
+            { key: 'password', label: '当前密码', placeholder: '必填', type: 'password' },
+            { key: 'totp', label: '当前动态码', placeholder: '6 位动态码', inputmode: 'numeric', autocomplete: 'one-time-code' },
+          ],
+          onOk: async (v) => {
+            const p = String(v.password || '');
+            const c = String(v.totp || '').trim();
+            if (!p) {
+              window.alert('需要输入当前密码');
+              return;
+            }
+            if (!c) {
+              window.alert('需要输入当前动态码');
+              return;
+            }
+            try {
+              await api('POST', '/api/admin/totp/disable', { password: p, totp: c });
+              $('totpActionResult').textContent = '已删除两步验证。';
+              try { await refreshAuth(); } catch {}
+              try { await refreshSettings(); } catch {}
+            } catch (e) {
+              $('totpActionResult').textContent = String((e && e.data && e.data.error) || (e && e.message) || '操作失败');
+            }
+          },
+        });
+        return;
+      }
+
+      if (kind === 'enable') {
+        location.href = '/setup';
+        return;
+      }
+
+      $('totpActionResult').textContent = '操作不支持';
       return;
+
+        if (kind === 'disable') {
+          $('totpActionResult').textContent = '已删除两步验证。';
+        } else {
+          $('totpActionResult').textContent = '已提交，需重新登录。';
+        }
+
+        if (resp && resp.needSetup) {
+          $('totpActionResult').textContent = '已提交：请打开 /setup 重新绑定。';
+        }
+
+        if (resp && resp.relogin) {
+          await doLogout();
+        } else {
+          try { await refreshAuth(); } catch {}
+          try { await refreshSettings(); } catch {}
+        }
+      } catch (e) {
+        $('totpActionResult').textContent = String((e && e.data && e.data.error) || (e && e.message) || '操作失败');
+      } finally {
+        try { $('totpCode').value = ''; } catch {}
+      }
     }
-    for(const r of runners){
-      const row = document.createElement('div');
-      row.className = 'runnerRow';
-      const left = document.createElement('div');
-      left.style.display='flex';
-      left.style.alignItems='center';
-      left.style.gap='10px';
 
-      const dot = document.createElement('span');
-      dot.className = 'dot ' + (r.online ? 'on' : 'off');
+    async function doLogin(ev) {
+      ev.preventDefault();
+      $('btnLogin').disabled = true;
+      $('loginError').textContent = '';
 
-      const meta = document.createElement('div');
-      meta.className='runnerMeta';
-      const nm = document.createElement('div');
-      nm.className='runnerName';
-      nm.textContent = r.name || r.id;
-      const sub = document.createElement('div');
-      sub.className='runnerSub';
-      sub.textContent = 'id: ' + r.id + (r.lastSeenAt ? (' | lastSeen: ' + new Date(r.lastSeenAt).toLocaleString()) : '');
-      meta.appendChild(nm);
-      meta.appendChild(sub);
+      try {
+        const username = $('authUser').value.trim();
+        const password = $('authPassword').value;
+        const inTotpStep = !$('authTotpField').classList.contains('hidden');
+        const body = inTotpStep
+          ? { username, password, totp: $('authTotp').value.trim() }
+          : { username, password };
+        const resp = await api('POST', '/api/auth/login', body);
 
-      left.appendChild(dot);
-      left.appendChild(meta);
+        if (resp && resp.needTotp && !resp.authenticated) {
+          setLoginTotpMode(true);
+          $('loginError').textContent = '请输入动态码继续登录';
+          try { $('authTotp').focus(); } catch {}
+          return;
+        }
+        if (!resp || !resp.authenticated) {
+          throw new Error('登录失败');
+        }
 
-      const right = document.createElement('div');
-      right.className='runnerSub';
-      right.textContent = r.online ? 'online' : 'offline';
-
-      row.appendChild(left);
-      row.appendChild(right);
-      list.appendChild(row);
+        setAuth(resp);
+        setLoginTotpMode(false);
+        showView('workspace');
+        await refreshRunnerList(true);
+      } catch (e) {
+        const msg = String((e && e.data && e.data.error) || (e && e.message) || '登录失败');
+        $('loginError').textContent = msg;
+        if (msg.indexOf('invalid credentials') >= 0) {
+          setLoginTotpMode(false);
+        } else {
+          try { $('authTotp').value = ''; } catch {}
+        }
+        try { window.alert(msg); } catch {}
+      } finally {
+        $('btnLogin').disabled = false;
+      }
     }
-  }
 
-  async function refreshProjects(){
-    const data = await api('GET','/api/projects');
-    $('projectsOut').textContent = pretty(data);
-  }
-
-  async function refreshSessions(){
-    const data = await api('GET','/api/sessions');
-    $('sessionsOut').textContent = pretty(data);
-  }
-
-  $('btnRegister').onclick = async () => {
-    $('btnRegister').disabled = true;
-    $('registerOut').textContent = '';
-    try{
-      const name = $('runnerName').value.trim();
-      const data = await api('POST','/api/runners/register',{ name });
-      $('registerOut').textContent = pretty(data);
-      await refreshRunners();
-    }catch(e){
-      $('registerOut').textContent = pretty(e.data || { error: e.message });
-    }finally{
-      $('btnRegister').disabled = false;
+    async function doLogout() {
+      $('btnLogout').disabled = true;
+      try {
+        await api('POST', '/api/auth/logout', {});
+      } catch {}
+      resetAuth();
+      showView('login');
+      $('btnLogout').disabled = false;
     }
-  };
 
-  $('btnRefreshRunners').onclick = () => refreshRunners();
-  $('btnRefreshProjects').onclick = () => refreshProjects();
-  $('btnRefreshSessions').onclick = () => refreshSessions();
+    function bindUiEvents() {
+      $('loginForm').addEventListener('submit', doLogin);
+      $('btnLogout').onclick = () => doLogout();
+      $('btnRefreshRunners').onclick = () => refreshRunnerList(true);
 
-  $('btnCreateProject').onclick = async () => {
-    $('btnCreateProject').disabled = true;
-    try{
-      const name = $('projectName').value.trim();
-      const runnerId = $('projectRunnerId').value.trim();
-      const data = await api('POST','/api/projects', { name, runnerId: runnerId || undefined });
-      await refreshProjects();
-      $('projectsOut').textContent = pretty(data) + "\n\n" + $('projectsOut').textContent;
-    }catch(e){
-      $('projectsOut').textContent = pretty(e.data || { error: e.message });
-    }finally{
-      $('btnCreateProject').disabled = false;
+      $('btnOpenSettings').onclick = async () => {
+        showView('settings');
+        try { await refreshSettings(); } catch {}
+      };
+      $('btnBackFromSettings').onclick = async () => {
+        showView('workspace');
+        await refreshRunnerList(false);
+      };
+      $('btnSaveAuth').onclick = () => saveAuthSettings();
+      $('btnTotpDisable').onclick = () => totpAction('disable');
+      $('btnTotpEnable').onclick = () => totpAction('enable');
+
+      $('btnBackToRunners').onclick = async () => {
+        showView('workspace');
+        await refreshRunnerList(false);
+      };
+      $('btnRefreshDetail').onclick = () => refreshRunnerDetail(true);
+      $('btnCreateSession').onclick = () => createSessionForRunner();
+
+      $('btnBackFromTerminal').onclick = async () => {
+        showView(state.returnView || 'runnerDetail');
+        if (state.selectedRunnerId) await refreshRunnerDetail(false);
+      };
+      $('btnTermReconnect').onclick = async () => {
+        if (!state.activeSession) return;
+        await connectTerminal(state.activeSession.id);
+      };
+      $('btnTermDisconnect').onclick = () => disconnectTerminal(true);
     }
-  };
 
-  $('btnCreateSession').onclick = async () => {
-    $('btnCreateSession').disabled = true;
-    try{
-      const runnerId = $('sessionRunnerId').value.trim();
-      const projectId = $('sessionProjectId').value.trim();
-      const tool = $('sessionTool').value;
-      const data = await api('POST','/api/sessions', { runnerId, projectId, tool });
-      await refreshSessions();
-      $('sessionsOut').textContent = pretty(data) + "\n\n" + $('sessionsOut').textContent;
-    }catch(e){
-      $('sessionsOut').textContent = pretty(e.data || { error: e.message });
-    }finally{
-      $('btnCreateSession').disabled = false;
+    async function bootstrap() {
+      initTerminal();
+      bindResizeHooks();
+      bindUiEvents();
+
+      try {
+        const me = await refreshAuth();
+
+        if (me && me.authenticated) {
+          showView('workspace');
+          await refreshRunnerList(true);
+
+          try {
+            const insecureDefault = me.security && me.security.defaultPassword;
+            if (insecureDefault) {
+              const go = window.confirm('检测到默认账密 admin/agentmesh 未修改，存在风险。现在去设置修改吗？');
+              if (go) {
+                showView('settings');
+                await refreshSettings();
+              }
+            }
+          } catch {}
+
+          return;
+        }
+      } catch {}
+
+      resetAuth();
+      showView('login');
     }
-  };
 
-  (async () => {
-    await refreshHealth();
-    await refreshRunners();
-    await refreshProjects();
-    await refreshSessions();
-  })();
-</script>
+    bootstrap();
+  </script>
 </body>
 </html>

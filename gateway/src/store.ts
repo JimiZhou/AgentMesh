@@ -8,6 +8,8 @@ export type RunnerRecord = {
   token: string;
   lastSeenAt?: number;
   capabilities?: any;
+  enrolledBy?: string;
+  enrolledAt?: number;
 };
 
 export type ProjectRecord = {
@@ -24,7 +26,12 @@ export type SessionRecord = {
   runnerId: string;
   projectId: string;
   tool: string;
-  status: 'created' | 'running' | 'ended' | 'error';
+  createdBy?: string;
+  projectPath?: string;
+  status: 'created' | 'starting' | 'running' | 'stopping' | 'ended' | 'exited' | 'error';
+  startedAt?: number;
+  exitedAt?: number;
+  lastError?: string;
 };
 
 export type GatewayState = {

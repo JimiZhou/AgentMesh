@@ -1083,6 +1083,15 @@
       autoRefreshTimer: null,
     };
 
+    function setEmptyText(el, text) {
+      if (!el) return;
+      el.innerHTML = '';
+      const tip = document.createElement('div');
+      tip.className = 'empty';
+      tip.textContent = String(text || '');
+      el.appendChild(tip);
+    }
+
     function modalHide() {
       $('modalMask').classList.add('hidden');
       $('modalTitle').textContent = '';
@@ -1371,7 +1380,7 @@
       } catch (e) {
         if (showError) {
           const msg = String((e && e.data && e.data.error) || (e && e.message) || '刷新失败');
-          $('runnerList').innerHTML = '<div class="empty">加载失败: ' + msg + '</div>';
+          setEmptyText($('runnerList'), '加载失败: ' + msg);
         }
       }
     }
@@ -1495,7 +1504,7 @@
       } catch (e) {
         const msg = String((e && e.data && e.data.error) || (e && e.message) || '加载 runner 详情失败');
         if (showError) {
-          $('detailSessionList').innerHTML = '<div class="empty">' + msg + '</div>';
+          setEmptyText($('detailSessionList'), msg);
         }
         if (e && e.status === 404) {
           showView('workspace');

@@ -20,7 +20,13 @@ export class JsonStore {
     }
     save() {
         fs.mkdirSync(path.dirname(this.filePath), { recursive: true });
-        fs.writeFileSync(this.filePath, JSON.stringify(this.state, null, 2));
+        fs.writeFileSync(this.filePath, JSON.stringify(this.state, null, 2), { mode: 0o600 });
+        try {
+            fs.chmodSync(this.filePath, 0o600);
+        }
+        catch {
+            // ignore chmod errors on non-posix filesystems
+        }
     }
     get() {
         return this.state;

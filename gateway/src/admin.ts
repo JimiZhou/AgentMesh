@@ -7,7 +7,7 @@ export async function registerAdminRoutes(app: FastifyInstance, deps: {
   clearAuthCookie: (req: any, reply: any) => void;
   checkCsrf: (req: any, reply: any, session: any) => boolean;
   cfgWebUser: () => string;
-  cfgWebPassword: () => string;
+  verifyWebPassword: (rawPassword: string) => boolean;
   cfgTotpEnabled: () => boolean;
   cfgTotpProvisioned: () => boolean;
   cfgTotpSecret: () => string;
@@ -47,7 +47,7 @@ export async function registerAdminRoutes(app: FastifyInstance, deps: {
     const newUser = typeof body.newUser === 'string' ? body.newUser.trim() : '';
     const newPassword = typeof body.newPassword === 'string' ? body.newPassword : '';
 
-    if (oldPassword !== deps.cfgWebPassword()) {
+    if (!deps.verifyWebPassword(oldPassword)) {
       reply.code(401);
       return { ok: false, error: 'invalid password' };
     }
@@ -57,9 +57,14 @@ export async function registerAdminRoutes(app: FastifyInstance, deps: {
       return { ok: false, error: 'username too short' };
     }
 
-    if (newPassword && newPassword.length < 6) {
+    if (newPassword && newPassword.length < 12) {
       reply.code(400);
-      return { ok: false, error: 'password too short' };
+      return { ok: false, error: 'password too short (min 12)' };
+    }
+
+    if (!newUser && !newPassword) {
+      reply.code(400);
+      return { ok: false, error: 'no changes provided' };
     }
 
     deps.setAuthConfig({
@@ -81,7 +86,7 @@ export async function registerAdminRoutes(app: FastifyInstance, deps: {
     const password = typeof body.password === 'string' ? body.password : '';
     const totp = typeof body.totp === 'string' ? body.totp.trim() : '';
 
-    if (password !== deps.cfgWebPassword()) {
+    if (!deps.verifyWebPassword(password)) {
       reply.code(401);
       return { ok: false, error: 'invalid password' };
     }
@@ -106,7 +111,7 @@ export async function registerAdminRoutes(app: FastifyInstance, deps: {
     const body = (req.body || {}) as any;
     const password = typeof body.password === 'string' ? body.password : '';
 
-    if (password !== deps.cfgWebPassword()) {
+    if (!deps.verifyWebPassword(password)) {
       reply.code(401);
       return { ok: false, error: 'invalid password' };
     }
@@ -126,7 +131,7 @@ export async function registerAdminRoutes(app: FastifyInstance, deps: {
     const password = typeof body.password === 'string' ? body.password : '';
     const totp = typeof body.totp === 'string' ? body.totp.trim() : '';
 
-    if (password !== deps.cfgWebPassword()) {
+    if (!deps.verifyWebPassword(password)) {
       reply.code(401);
       return { ok: false, error: 'invalid password' };
     }

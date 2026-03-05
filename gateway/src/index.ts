@@ -3,7 +3,7 @@ import websocket from '@fastify/websocket';
 import { nanoid } from 'nanoid';
 import QRCode from 'qrcode';
 import { JsonStore, type SessionRecord } from './store.js';
-import { loadConfig, saveConfig } from './config.js';
+import { loadConfig } from './config.js';
 import { updateConfig } from './config-ops.js';
 import { registerAdminRoutes } from './admin.js';
 import { Buffer } from 'node:buffer';
@@ -16,6 +16,15 @@ const PORT = Number(process.env.AGENTMESH_PORT || 8787);
 const HOST = process.env.AGENTMESH_HOST || '127.0.0.1';
 const DATA_FILE = process.env.AGENTMESH_DATA_FILE || new URL('../data/state.json', import.meta.url).pathname;
 const CONFIG_FILE = process.env.AGENTMESH_CONFIG_FILE || new URL('../data/config.json', import.meta.url).pathname;
+
+function parseEnvBool(raw: string | undefined, fallback: boolean): boolean {
+  if (typeof raw !== 'string') return fallback;
+  const v = raw.trim().toLowerCase();
+  if (!v) return fallback;
+  return v === '1' || v === 'true' || v === 'yes' || v === 'on';
+}
+
+const TRUST_PROXY = parseEnvBool(process.env.AGENTMESH_TRUST_PROXY, false);
 
 // IMPORTANT: resolve dist/ relative to project root so it works for both:
 // - src/index.ts (ts-node/esm)
@@ -44,11 +53,79 @@ function reloadConfig() {
   return cfg;
 }
 
+const PASSWORD_HASH_PREFIX = 'scrypt';
+const PASSWORD_SCRYPT_N = 16384;
+const PASSWORD_SCRYPT_R = 8;
+const PASSWORD_SCRYPT_P = 1;
+const PASSWORD_KEYLEN = 32;
+
+function hashPassword(rawPassword: string): string {
+  const salt = crypto.randomBytes(16);
+  const derived = crypto.scryptSync(rawPassword, salt, PASSWORD_KEYLEN, {
+    N: PASSWORD_SCRYPT_N,
+    r: PASSWORD_SCRYPT_R,
+    p: PASSWORD_SCRYPT_P,
+    maxmem: 64 * 1024 * 1024,
+  });
+  return [
+    PASSWORD_HASH_PREFIX,
+    String(PASSWORD_SCRYPT_N),
+    String(PASSWORD_SCRYPT_R),
+    String(PASSWORD_SCRYPT_P),
+    salt.toString('base64url'),
+    derived.toString('base64url'),
+  ].join('$');
+}
+
+function verifyPasswordHash(storedHash: string, rawPassword: string): boolean {
+  const parts = String(storedHash || '').split('$');
+  if (parts.length !== 6) return false;
+  const [prefix, rawN, rawR, rawP, saltB64, hashB64] = parts;
+  if (prefix !== PASSWORD_HASH_PREFIX) return false;
+
+  const N = Number(rawN);
+  const r = Number(rawR);
+  const p = Number(rawP);
+  if (!Number.isFinite(N) || !Number.isFinite(r) || !Number.isFinite(p)) return false;
+
+  let salt: Buffer;
+  let expected: Buffer;
+  try {
+    salt = Buffer.from(saltB64, 'base64url');
+    expected = Buffer.from(hashB64, 'base64url');
+  } catch {
+    return false;
+  }
+  if (!salt.length || !expected.length) return false;
+
+  let actual: Buffer;
+  try {
+    actual = crypto.scryptSync(rawPassword, salt, expected.length, {
+      N,
+      r,
+      p,
+      maxmem: 64 * 1024 * 1024,
+    });
+  } catch {
+    return false;
+  }
+
+  if (actual.length !== expected.length) return false;
+  try {
+    return crypto.timingSafeEqual(actual, expected);
+  } catch {
+    return false;
+  }
+}
+
 function setAuthConfig(next: { user?: string; password?: string }) {
   updateConfig(CONFIG_FILE, (c) => {
     c.web = c.web || {};
     if (typeof next.user === 'string') c.web.user = next.user;
-    if (typeof next.password === 'string') c.web.password = next.password;
+    if (typeof next.password === 'string') {
+      c.web.passwordHash = hashPassword(next.password);
+      delete (c.web as any).password;
+    }
   });
   reloadConfig();
 }
@@ -69,8 +146,50 @@ function cfgWebUser() {
   return cfg.web?.user || 'admin';
 }
 
-function cfgWebPassword() {
-  return cfg.web?.password || 'agentmesh';
+function cfgWebPasswordHash() {
+  return String(cfg.web?.passwordHash || '').trim();
+}
+
+function cfgLegacyWebPassword() {
+  return String((cfg.web as any)?.password || '');
+}
+
+function verifyWebPassword(rawPassword: string): boolean {
+  const hash = cfgWebPasswordHash();
+  if (hash) return verifyPasswordHash(hash, rawPassword);
+  const legacy = cfgLegacyWebPassword();
+  if (!legacy) return false;
+  return timingSafeEqualString(legacy, rawPassword);
+}
+
+function isDefaultCredentialInUse() {
+  return cfgWebUser() === 'admin' && verifyWebPassword('agentmesh');
+}
+
+function ensurePasswordHashConfigured(): void {
+  reloadConfig();
+  if (cfgWebPasswordHash()) return;
+
+  const fromEnv = String(process.env.AGENTMESH_BOOTSTRAP_PASSWORD || '');
+  const legacy = cfgLegacyWebPassword();
+  const bootstrapPassword = fromEnv || legacy;
+  if (!bootstrapPassword) {
+    throw new Error(
+      [
+        'missing gateway password hash configuration.',
+        'Set AGENTMESH_BOOTSTRAP_PASSWORD for first boot,',
+        'or set web.passwordHash in gateway/data/config.json.',
+      ].join(' '),
+    );
+  }
+
+  updateConfig(CONFIG_FILE, (c) => {
+    c.web = c.web || {};
+    if (!String(c.web.user || '').trim()) c.web.user = 'admin';
+    c.web.passwordHash = hashPassword(bootstrapPassword);
+    delete (c.web as any).password;
+  });
+  reloadConfig();
 }
 
 function cfgWebSessionTtlMs() {
@@ -112,8 +231,10 @@ function cfgEnrollTokenTtlMs() {
 const TERMINAL_GRANT_TTL_MS = Number(process.env.AGENTMESH_TERMINAL_GRANT_TTL_MS || 60 * 1000);
 const AUTH_COOKIE_NAME = 'agentmesh_sid';
 
-const app = Fastify({ logger: true, trustProxy: true });
+const app = Fastify({ logger: true, trustProxy: TRUST_PROXY });
 await app.register(websocket);
+
+ensurePasswordHashConfigured();
 
 await registerAdminRoutes(app, {
   requireSession: requireWebSession,
@@ -122,7 +243,7 @@ await registerAdminRoutes(app, {
   clearAuthCookie,
   checkCsrf: enforceCsrf,
   cfgWebUser,
-  cfgWebPassword,
+  verifyWebPassword,
   cfgTotpEnabled,
   cfgTotpProvisioned,
   cfgTotpSecret,
@@ -348,18 +469,54 @@ function parseCookieHeader(raw: string | undefined): Record<string, string> {
   return out;
 }
 
+function parseWebSocketProtocols(raw: string | undefined): string[] {
+  return String(raw || '')
+    .split(',')
+    .map((x) => x.trim())
+    .filter(Boolean);
+}
+
+function extractBearerToken(rawHeader: string | undefined): string {
+  const raw = String(rawHeader || '').trim();
+  if (!raw) return '';
+  const m = /^Bearer\s+(.+)$/i.exec(raw);
+  return m ? m[1].trim() : '';
+}
+
+function extractTokenFromProtocolHeader(rawHeader: string | undefined): string {
+  for (const proto of parseWebSocketProtocols(rawHeader)) {
+    if (proto.startsWith('token.')) return proto.slice('token.'.length).trim();
+  }
+  return '';
+}
+
+function escapeHtml(raw: string): string {
+  return String(raw || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 function isSecureRequest(req: any): boolean {
-  const xfp = String(req.headers['x-forwarded-proto'] || '')
-    .split(',')[0]
-    .trim()
-    .toLowerCase();
+  const xfp = TRUST_PROXY
+    ? String(req.headers['x-forwarded-proto'] || '')
+      .split(',')[0]
+      .trim()
+      .toLowerCase()
+    : '';
   if (xfp) return xfp === 'https';
   return String(req.protocol || '').toLowerCase() === 'https';
 }
 
 function expectedRequestOrigin(req: any): string {
-  const protoRaw = String(req.headers['x-forwarded-proto'] || req.protocol || 'http').split(',')[0].trim();
-  const hostRaw = String(req.headers['x-forwarded-host'] || req.headers.host || '').split(',')[0].trim();
+  const protoRaw = String(
+    (TRUST_PROXY ? req.headers['x-forwarded-proto'] : '') || req.protocol || 'http',
+  ).split(',')[0].trim();
+  const hostRaw = String(
+    (TRUST_PROXY ? req.headers['x-forwarded-host'] : '') || req.headers.host || '',
+  ).split(',')[0].trim();
   if (!hostRaw) return '';
   return `${protoRaw || 'http'}://${hostRaw}`;
 }
@@ -470,7 +627,10 @@ function touchWebSession(session: WebSession): void {
 }
 
 function getLoginClientKey(req: any): string {
-  return String(req.ip || req.socket?.remoteAddress || 'unknown').trim() || 'unknown';
+  const directIp = String(req.socket?.remoteAddress || '').trim();
+  if (!TRUST_PROXY && directIp) return directIp;
+  const observedIp = String(req.ip || '').trim();
+  return observedIp || directIp || 'unknown';
 }
 
 function isLoginRateLimited(req: any): boolean {
@@ -804,6 +964,33 @@ setInterval(() => {
   }
 }, 30_000).unref();
 
+const BASE_CSP = [
+  "default-src 'self'",
+  "base-uri 'self'",
+  "frame-ancestors 'none'",
+  "object-src 'none'",
+  "form-action 'self'",
+  "img-src 'self' data:",
+  "style-src 'self' 'unsafe-inline'",
+  "script-src 'self' 'unsafe-inline'",
+  "connect-src 'self' ws: wss:",
+  "font-src 'self' data:",
+].join('; ');
+
+app.addHook('onSend', async (req, reply, payload) => {
+  reply.header('X-Content-Type-Options', 'nosniff');
+  reply.header('X-Frame-Options', 'DENY');
+  reply.header('Referrer-Policy', 'no-referrer');
+  reply.header('Cross-Origin-Opener-Policy', 'same-origin');
+  reply.header('Cross-Origin-Resource-Policy', 'same-origin');
+  reply.header('Permissions-Policy', 'geolocation=(), microphone=(), camera=()');
+  reply.header('Content-Security-Policy', BASE_CSP);
+  if (isSecureRequest(req)) {
+    reply.header('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  }
+  return payload;
+});
+
 app.addHook('onRequest', async (req, reply) => {
   const path = String(req.url || '').split('?')[0] || '/';
   if (path === '/health' || path === '/' || path === '/ws/runner' || path === '/ws/terminal') return;
@@ -877,7 +1064,12 @@ function generateTotpSecretBase32(bytes = 20): string {
   return out;
 }
 
-app.get('/setup', async (_req, reply) => {
+app.get('/setup', async (req, reply) => {
+  const session = requireWebSession(req, reply);
+  if (!session) return;
+  touchWebSession(session);
+  setAuthCookie(req, reply, session.id, session.expiresAt);
+
   const totpEnabled = cfg.web?.totp?.enabled !== false;
   const provisioned = cfg.web?.totp?.provisioned === true;
   if (!totpEnabled) {
@@ -889,8 +1081,9 @@ app.get('/setup', async (_req, reply) => {
     return reply.type('text/plain; charset=utf-8').send('already provisioned');
   }
 
-  const issuer = cfgTotpIssuer();
-  const account = cfgWebUser();
+  const issuer = escapeHtml(cfgTotpIssuer());
+  const account = escapeHtml(cfgWebUser());
+  const csrfTokenLiteral = JSON.stringify(session.csrfToken);
   const html = `<!doctype html>
   <html lang="zh-CN"><head>
     <meta charset="utf-8" />
@@ -931,11 +1124,19 @@ app.get('/setup', async (_req, reply) => {
     </div>
     <script>
       const $ = (id) => document.getElementById(id);
+      const CSRF_TOKEN = ${csrfTokenLiteral};
       $('btn').onclick = async () => {
         $('err').textContent = '';
         const totp = String($('code').value || '').trim();
         try {
-          const res = await fetch('/setup/confirm', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ totp })});
+          const res = await fetch('/setup/confirm', {
+            method:'POST',
+            headers:{
+              'Content-Type':'application/json',
+              'X-AgentMesh-CSRF': CSRF_TOKEN,
+            },
+            body: JSON.stringify({ totp })
+          });
           const text = await res.text();
           let j; try{ j = JSON.parse(text);}catch{ j = {raw:text}; }
           if (!res.ok) throw new Error(j.error || ('HTTP ' + res.status));
@@ -950,7 +1151,12 @@ app.get('/setup', async (_req, reply) => {
   reply.type('text/html; charset=utf-8').send(html);
 });
 
-app.get('/setup/qr', async (_req, reply) => {
+app.get('/setup/qr', async (req, reply) => {
+  const session = requireWebSession(req, reply);
+  if (!session) return;
+  touchWebSession(session);
+  setAuthCookie(req, reply, session.id, session.expiresAt);
+
   const totpEnabled = cfgTotpEnabled();
   const provisioned = cfgTotpProvisioned();
   if (!totpEnabled || provisioned) {
@@ -979,6 +1185,12 @@ app.get('/setup/qr', async (_req, reply) => {
 });
 
 app.post('/setup/confirm', async (req, reply) => {
+  const session = requireWebSession(req, reply);
+  if (!session) return;
+  if (!enforceCsrf(req, reply, session)) return;
+  touchWebSession(session);
+  setAuthCookie(req, reply, session.id, session.expiresAt);
+
   const totpEnabled = cfgTotpEnabled();
   const provisioned = cfgTotpProvisioned();
   if (!totpEnabled) {
@@ -1046,7 +1258,7 @@ app.post('/api/auth/login', async (req, reply) => {
 
   reloadConfig();
 
-  if (username !== cfgWebUser() || password !== cfgWebPassword()) {
+  if (username !== cfgWebUser() || !verifyWebPassword(password)) {
     metrics.authFailures += 1;
     noteLoginFailure(req);
     reply.code(401);
@@ -1083,7 +1295,7 @@ app.post('/api/auth/login', async (req, reply) => {
     csrfToken: session.csrfToken,
     expiresAt: session.expiresAt,
     security: {
-      defaultPassword: cfgWebUser() === 'admin' && cfgWebPassword() === 'agentmesh',
+      defaultPassword: isDefaultCredentialInUse(),
       totpProvisioned: cfgTotpProvisioned(),
       totpEnabled: cfgTotpEnabled(),
     },
@@ -1111,6 +1323,11 @@ app.get('/api/auth/me', async (req, reply) => {
     user: session.user,
     csrfToken: session.csrfToken,
     expiresAt: session.expiresAt,
+    security: {
+      defaultPassword: isDefaultCredentialInUse(),
+      totpProvisioned: cfgTotpProvisioned(),
+      totpEnabled: cfgTotpEnabled(),
+    },
     totpConfigured: !!cfgTotpSecret(),
     totpEnabled: cfgTotpEnabled(),
     totpProvisioned: cfgTotpProvisioned(),
@@ -1243,7 +1460,7 @@ app.post('/api/runners/enroll', async (req, reply) => {
     ok: true,
     runnerId: id,
     runnerToken,
-    wsUrl: `/ws/runner?runnerId=${id}&token=${runnerToken}`,
+    wsUrl: `/ws/runner?runnerId=${id}`,
     gatewayWs,
   };
 });
@@ -1448,7 +1665,9 @@ app.get('/ws/runner', { websocket: true }, (conn, req) => {
   const ws = (conn as any).socket || conn;
   const url = new URL(req.url || '', `http://${req.headers.host}`);
   const runnerId = url.searchParams.get('runnerId') || '';
-  const token = url.searchParams.get('token') || '';
+  const tokenFromQuery = url.searchParams.get('token') || '';
+  const tokenFromAuth = extractBearerToken(String(req.headers.authorization || ''));
+  const token = tokenFromAuth || tokenFromQuery;
 
   const runner = store.get().runners[runnerId];
   if (!runner || runner.token !== token) {
@@ -1574,7 +1793,7 @@ app.get('/ws/runner', { websocket: true }, (conn, req) => {
   });
 });
 
-// Browser terminal WS: client connects with ?sessionId=...&token=...
+// Browser terminal WS: client connects with ?sessionId=... and token via Sec-WebSocket-Protocol.
 app.get('/ws/terminal', { websocket: true }, (conn, req) => {
   const ws = (conn as any).socket || conn;
 
@@ -1585,7 +1804,9 @@ app.get('/ws/terminal', { websocket: true }, (conn, req) => {
 
   const url = new URL(req.url || '', `http://${req.headers.host}`);
   const sessionId = url.searchParams.get('sessionId') || '';
-  const terminalToken = url.searchParams.get('token') || '';
+  const tokenFromQuery = url.searchParams.get('token') || '';
+  const tokenFromProtocol = extractTokenFromProtocolHeader(String(req.headers['sec-websocket-protocol'] || ''));
+  const terminalToken = tokenFromProtocol || tokenFromQuery;
   if (!sessionId || !terminalToken) {
     ws.close(1008, 'missing sessionId/token');
     return;
@@ -2122,9 +2343,10 @@ app.post('/api/sessions/:id/pty/resize', async (req, reply) => {
   return { ok: true };
 });
 
-app.get('/api/sessions', async (req) => {
+app.get('/api/sessions', async (req, reply) => {
   const authSession = getWebSessionFromRequest(req);
   if (!authSession) {
+    reply.code(401);
     return { ok: false, error: 'unauthorized' };
   }
 

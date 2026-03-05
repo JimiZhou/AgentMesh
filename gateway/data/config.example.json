@@ -1,12 +1,12 @@
 {
   "web": {
     "user": "admin",
-    "password": "agentmesh",
+    "passwordHash": "",
     "sessionTtlMs": 43200000,
     "totp": {
       "issuer": "AgentMesh",
       "secretBase32": "",
-      "enabled": false,
+      "enabled": true,
       "provisioned": false
     },
     "allowedOrigins": []

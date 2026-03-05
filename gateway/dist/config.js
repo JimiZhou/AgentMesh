@@ -3,7 +3,8 @@ import path from 'node:path';
 export const DEFAULT_CONFIG = {
     web: {
         user: 'admin',
-        password: 'agentmesh',
+        passwordHash: '',
+        password: '',
         sessionTtlMs: 12 * 60 * 60 * 1000,
         totp: {
             issuer: 'AgentMesh',
@@ -47,5 +48,11 @@ export function loadConfig(filePath) {
 }
 export function saveConfig(filePath, cfg) {
     fs.mkdirSync(path.dirname(filePath), { recursive: true });
-    fs.writeFileSync(filePath, JSON.stringify(cfg, null, 2));
+    fs.writeFileSync(filePath, JSON.stringify(cfg, null, 2), { mode: 0o600 });
+    try {
+        fs.chmodSync(filePath, 0o600);
+    }
+    catch {
+        // ignore chmod errors on non-posix filesystems
+    }
 }

@@ -4,6 +4,8 @@ import path from 'node:path';
 export type GatewayConfig = {
   web?: {
     user?: string;
+    passwordHash?: string;
+    // Legacy plaintext password field. Kept for migration only.
     password?: string;
     sessionTtlMs?: number;
     totp?: {
@@ -26,7 +28,8 @@ export type GatewayConfig = {
 export const DEFAULT_CONFIG: Required<GatewayConfig> = {
   web: {
     user: 'admin',
-    password: 'agentmesh',
+    passwordHash: '',
+    password: '',
     sessionTtlMs: 12 * 60 * 60 * 1000,
     totp: {
       issuer: 'AgentMesh',
@@ -70,5 +73,10 @@ export function loadConfig(filePath: string): GatewayConfig {
 
 export function saveConfig(filePath: string, cfg: GatewayConfig): void {
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
-  fs.writeFileSync(filePath, JSON.stringify(cfg, null, 2));
+  fs.writeFileSync(filePath, JSON.stringify(cfg, null, 2), { mode: 0o600 });
+  try {
+    fs.chmodSync(filePath, 0o600);
+  } catch {
+    // ignore chmod errors on non-posix filesystems
+  }
 }

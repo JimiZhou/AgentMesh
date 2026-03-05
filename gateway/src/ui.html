@@ -1585,9 +1585,9 @@
       }
     }
 
-    function termWsUrl(sessionId, token) {
+    function termWsUrl(sessionId) {
       const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-      return proto + '//' + location.host + '/ws/terminal?sessionId=' + encodeURIComponent(sessionId) + '&token=' + encodeURIComponent(token);
+      return proto + '//' + location.host + '/ws/terminal?sessionId=' + encodeURIComponent(sessionId);
     }
 
     function getTermCols() {
@@ -1764,7 +1764,7 @@
       }
 
       disconnectTerminal(false);
-      termWs = new WebSocket(termWsUrl(sessionId, token));
+      termWs = new WebSocket(termWsUrl(sessionId), 'token.' + token);
       termWs.binaryType = 'arraybuffer';
 
       termWs.onopen = () => {

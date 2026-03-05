@@ -124,9 +124,10 @@ async function ensureIdentity() {
     const existing = loadIdentity(ID_FILE);
     if (existing)
         return existing;
-    if (ENROLL_CODE)
-        return enrollRunner(ENROLL_CODE);
-    return registerRunner();
+    if (!ENROLL_CODE) {
+        throw new Error('runner identity missing; set AGENTMESH_ENROLL_CODE and enroll via gateway first');
+    }
+    return enrollRunner(ENROLL_CODE);
 }
 function resolveProjectPath(projectPath) {
     const p = typeof projectPath === 'string' && projectPath.trim() ? projectPath.trim() : process.cwd();
@@ -168,9 +169,13 @@ async function connectLoop() {
         attempt += 1;
         try {
             const id = await ensureIdentity();
-            const wsUrl = `${gatewayWs}/ws/runner?runnerId=${encodeURIComponent(id.runnerId)}&token=${encodeURIComponent(id.runnerToken)}`;
-            console.log(`[runner] connecting ws ${wsUrl}`);
-            const ws = new WebSocket(wsUrl);
+            const wsUrl = `${gatewayWs}/ws/runner?runnerId=${encodeURIComponent(id.runnerId)}`;
+            console.log(`[runner] connecting ws gateway=${gatewayWs} runnerId=${id.runnerId}`);
+            const ws = new WebSocket(wsUrl, {
+                headers: {
+                    Authorization: `Bearer ${id.runnerToken}`,
+                },
+            });
             await new Promise((resolve, reject) => {
                 ws.once('open', () => resolve());
                 ws.once('error', (e) => reject(e));

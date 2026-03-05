@@ -28,7 +28,7 @@ export async function registerAdminRoutes(app, deps) {
         const oldPassword = typeof body.oldPassword === 'string' ? body.oldPassword : '';
         const newUser = typeof body.newUser === 'string' ? body.newUser.trim() : '';
         const newPassword = typeof body.newPassword === 'string' ? body.newPassword : '';
-        if (oldPassword !== deps.cfgWebPassword()) {
+        if (!deps.verifyWebPassword(oldPassword)) {
             reply.code(401);
             return { ok: false, error: 'invalid password' };
         }
@@ -36,9 +36,13 @@ export async function registerAdminRoutes(app, deps) {
             reply.code(400);
             return { ok: false, error: 'username too short' };
         }
-        if (newPassword && newPassword.length < 6) {
+        if (newPassword && newPassword.length < 12) {
             reply.code(400);
-            return { ok: false, error: 'password too short' };
+            return { ok: false, error: 'password too short (min 12)' };
+        }
+        if (!newUser && !newPassword) {
+            reply.code(400);
+            return { ok: false, error: 'no changes provided' };
         }
         deps.setAuthConfig({
             user: newUser || undefined,
@@ -57,7 +61,7 @@ export async function registerAdminRoutes(app, deps) {
         const body = (req.body || {});
         const password = typeof body.password === 'string' ? body.password : '';
         const totp = typeof body.totp === 'string' ? body.totp.trim() : '';
-        if (password !== deps.cfgWebPassword()) {
+        if (!deps.verifyWebPassword(password)) {
             reply.code(401);
             return { ok: false, error: 'invalid password' };
         }
@@ -79,7 +83,7 @@ export async function registerAdminRoutes(app, deps) {
             return;
         const body = (req.body || {});
         const password = typeof body.password === 'string' ? body.password : '';
-        if (password !== deps.cfgWebPassword()) {
+        if (!deps.verifyWebPassword(password)) {
             reply.code(401);
             return { ok: false, error: 'invalid password' };
         }
@@ -97,7 +101,7 @@ export async function registerAdminRoutes(app, deps) {
         const body = (req.body || {});
         const password = typeof body.password === 'string' ? body.password : '';
         const totp = typeof body.totp === 'string' ? body.totp.trim() : '';
-        if (password !== deps.cfgWebPassword()) {
+        if (!deps.verifyWebPassword(password)) {
             reply.code(401);
             return { ok: false, error: 'invalid password' };
         }

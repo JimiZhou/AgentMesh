@@ -7,6 +7,8 @@ import { Buffer } from 'node:buffer';
 import { loadIdentity, saveIdentity, type RunnerIdentity } from './state.js';
 import { spawnCodexPty, resizePty, killPty, type PtySession } from './pty.js';
 import {
+  applySessionBackendConstraints,
+  commandExists,
   detectToolCapabilities,
   resolveToolCommands,
   supportedToolsFrom,
@@ -134,10 +136,12 @@ async function enrollRunner(enrollCode: string): Promise<RunnerIdentity> {
 function detectCapabilities(): {
   tools: ToolAvailability;
   toolDetails: ToolCapabilityDetails;
-  features: { tmux: true };
+  features: { tmux: boolean };
   platform: { os: NodeJS.Platform; arch: string };
 } {
-  const { tools, toolDetails, unsupported } = detectToolCapabilities(toolCommands);
+  const tmuxAvailable = commandExists('tmux');
+  const detected = applySessionBackendConstraints(detectToolCapabilities(toolCommands), { tmuxAvailable });
+  const { tools, toolDetails, unsupported } = detected;
   if (unsupported.length) {
     console.log('[runner] tool unavailable on this host', { unsupported });
   }
@@ -146,7 +150,7 @@ function detectCapabilities(): {
     tools,
     toolDetails,
     features: {
-      tmux: true,
+      tmux: commandExists('tmux'),
     },
     platform: {
       os: process.platform,

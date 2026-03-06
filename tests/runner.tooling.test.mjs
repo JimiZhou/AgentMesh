@@ -3,6 +3,7 @@ import test from 'node:test';
 
 const toolingModuleUrl = new URL('../runner/dist/tooling.js', import.meta.url);
 const {
+  applySessionBackendConstraints,
   detectToolCapabilities,
   extractPrimaryCommand,
   resolveToolAvailability,
@@ -67,6 +68,22 @@ test('runner tooling detection carries override reason into tool details', () =>
   assert.match(String(detected.toolDetails.gemini.reason || ''), /forced disabled/i);
   assert.equal(detected.unsupported.length, 1);
   assert.equal(detected.unsupported[0].tool, 'gemini');
+});
+
+test('runner tooling disables all tools when tmux backend is unavailable', () => {
+  const commands = {
+    codex: { command: 'codex', source: 'default' },
+    claude: { command: 'claude', source: 'default' },
+    gemini: { command: 'gemini', source: 'default' },
+  };
+  const detected = detectToolCapabilities(commands, {}, () => true);
+  const constrained = applySessionBackendConstraints(detected, { tmuxAvailable: false });
+
+  assert.equal(constrained.tools.codex, false);
+  assert.equal(constrained.tools.claude, false);
+  assert.equal(constrained.tools.gemini, false);
+  assert.match(String(constrained.toolDetails.codex.reason || ''), /tmux is required/i);
+  assert.equal(constrained.unsupported.length, 3);
 });
 
 test('runner tooling extracts command executable token from command strings with env and args', () => {

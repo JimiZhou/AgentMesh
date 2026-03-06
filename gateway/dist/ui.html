@@ -10,6 +10,7 @@
     :root {
       --font-sans: "Space Grotesk", "Avenir Next", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
       --font-mono: "JetBrains Mono", "SFMono-Regular", Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      --app-height: 100dvh;
       --bg: #e8eff4;
       --bg-deep: #dbe5ee;
       --panel: rgba(255, 255, 255, 0.66);
@@ -80,6 +81,11 @@
       letter-spacing: 0.01em;
     }
 
+    body.terminal-active {
+      background: #020817;
+      color: #e2e8f0;
+    }
+
     body::before {
       content: "";
       position: fixed;
@@ -94,12 +100,20 @@
       z-index: 0;
     }
 
+    body.terminal-active::before {
+      display: none;
+    }
+
     .atmosphere {
       position: fixed;
       inset: 0;
       overflow: hidden;
       pointer-events: none;
       z-index: 0;
+    }
+
+    body.terminal-active .atmosphere {
+      display: none;
     }
 
     .orb {
@@ -144,11 +158,20 @@
     .app {
       position: relative;
       z-index: 1;
-      min-height: 100vh;
+      min-height: var(--app-height);
       padding:
         calc(28px + env(safe-area-inset-top, 0px))
         clamp(14px, 3vw, 30px)
         calc(28px + env(safe-area-inset-bottom, 0px));
+    }
+
+    .app.terminal-mode {
+      min-height: var(--app-height);
+      padding:
+        calc(10px + env(safe-area-inset-top, 0px))
+        max(8px, env(safe-area-inset-right, 0px))
+        calc(10px + env(safe-area-inset-bottom, 0px))
+        max(8px, env(safe-area-inset-left, 0px));
     }
 
     .view {
@@ -635,21 +658,70 @@
     }
 
     .terminal-layout {
-      height: calc(100dvh - 56px);
-      max-width: 1440px;
+      height: calc(var(--app-height) - 20px);
+      max-width: 1500px;
       margin: 0 auto;
       display: grid;
       gap: 12px;
-      grid-template-rows: auto 1fr;
+      grid-template-rows: auto minmax(0, 1fr);
+      min-height: 0;
+    }
+
+    body.terminal-active .panel {
+      border-color: rgba(100, 116, 139, 0.32);
+      background: linear-gradient(180deg, rgba(2, 12, 24, 0.96), rgba(2, 20, 37, 0.90));
+      box-shadow: none;
+      backdrop-filter: none;
+    }
+
+    body.terminal-active .panel::after {
+      opacity: 0;
     }
 
     .terminal-head {
-      padding: 12px 14px;
-      display: flex;
-      justify-content: space-between;
+      padding: 11px 13px;
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
       align-items: center;
-      gap: 10px;
+      gap: 10px 14px;
+    }
+
+    .terminal-meta {
+      min-width: 0;
+      display: grid;
+      gap: 6px;
+    }
+
+    .terminal-status {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 8px;
       flex-wrap: wrap;
+    }
+
+    .term-conn.connected {
+      color: #22c55e;
+      border-color: rgba(34, 197, 94, 0.34);
+      background: rgba(34, 197, 94, 0.10);
+    }
+
+    .term-conn.connecting {
+      color: #f59e0b;
+      border-color: rgba(245, 158, 11, 0.34);
+      background: rgba(245, 158, 11, 0.12);
+    }
+
+    .term-conn.disconnected,
+    .term-conn.error {
+      color: #f87171;
+      border-color: rgba(248, 113, 113, 0.34);
+      background: rgba(248, 113, 113, 0.11);
+    }
+
+    .term-cursor {
+      font-family: var(--font-mono);
+      font-size: 12px;
     }
 
     .terminal-card {
@@ -657,7 +729,7 @@
       padding: 12px;
       display: grid;
       gap: 10px;
-      grid-template-rows: 1fr auto;
+      grid-template-rows: minmax(0, 1fr) auto auto;
     }
 
     .term-host {
@@ -670,9 +742,62 @@
       box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), var(--shadow-sm);
     }
 
+    .term-host .xterm .xterm-cursor-layer .xterm-cursor {
+      box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.86);
+    }
+
     .term-hint {
       color: var(--muted);
       font-size: 12px;
+    }
+
+    .term-mobile-keys {
+      display: none;
+      gap: 7px;
+      overflow-x: auto;
+      padding-bottom: 2px;
+      scrollbar-width: none;
+      -ms-overflow-style: none;
+    }
+
+    .term-mobile-keys::-webkit-scrollbar {
+      display: none;
+    }
+
+    .term-mobile-keys button {
+      white-space: nowrap;
+      min-height: 34px;
+      min-width: 62px;
+      padding: 7px 10px;
+      border-radius: 10px;
+      font-size: 12px;
+    }
+
+    body.keyboard-open .term-hint {
+      display: none;
+    }
+
+    body.keyboard-open .terminal-layout {
+      height: calc(var(--app-height) - 6px);
+      gap: 6px;
+    }
+
+    body.keyboard-open .terminal-head {
+      padding: 8px 9px;
+      gap: 7px 10px;
+    }
+
+    body.keyboard-open #termMeta {
+      display: none;
+    }
+
+    body.keyboard-open .terminal-card {
+      padding: 6px;
+      gap: 6px;
+    }
+
+    body.keyboard-open .term-mobile-keys {
+      display: none;
     }
 
     .basic-wrap {
@@ -767,11 +892,27 @@
     }
 
     @media (max-width: 780px) {
+      .atmosphere {
+        display: none;
+      }
+
+      .panel {
+        backdrop-filter: none;
+      }
+
       .app {
         padding:
           calc(10px + env(safe-area-inset-top, 0px))
           10px
           calc(10px + env(safe-area-inset-bottom, 0px));
+      }
+
+      .app.terminal-mode {
+        padding:
+          calc(6px + env(safe-area-inset-top, 0px))
+          max(6px, env(safe-area-inset-right, 0px))
+          calc(6px + env(safe-area-inset-bottom, 0px))
+          max(6px, env(safe-area-inset-left, 0px));
       }
 
       .login-wrap {
@@ -800,27 +941,54 @@
       }
 
       .terminal-layout {
-        height: calc(100dvh - 20px);
+        height: calc(var(--app-height) - 8px);
+        gap: 8px;
       }
 
       .terminal-head {
-        padding: 11px;
+        grid-template-columns: 1fr;
+        padding: 9px 10px;
+        gap: 8px;
       }
 
       .terminal-head .row {
         width: 100%;
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 7px;
       }
 
       .terminal-head .row button {
-        flex: 1 1 calc(33.333% - 8px);
+        flex: none;
+        min-height: 38px;
+        padding: 8px 10px;
+        font-size: 13px;
+      }
+
+      .terminal-meta {
+        gap: 5px;
+      }
+
+      .terminal-status {
+        justify-content: flex-start;
       }
 
       .terminal-card {
-        padding: 10px;
+        padding: 8px;
+        gap: 8px;
       }
 
       .term-host {
-        min-height: 56dvh;
+        min-height: 0;
+        border-radius: 12px;
+      }
+
+      .term-hint {
+        font-size: 11px;
+      }
+
+      .term-mobile-keys {
+        display: flex;
       }
 
       .session-actions button {
@@ -834,9 +1002,17 @@
     }
 
     @media (max-width: 520px) {
-      .header-card .row button,
-      .terminal-head .row button {
+      .header-card .row button {
         flex: 1 1 100%;
+      }
+
+      .terminal-head .row {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+
+      .term-mobile-keys button {
+        min-width: 54px;
+        padding: 6px 8px;
       }
 
       .session-meta {
@@ -872,7 +1048,7 @@
     <span class="orb orb-blue"></span>
     <span class="orb orb-amber"></span>
   </div>
-  <div class="app">
+  <div id="appRoot" class="app">
     <section id="loginView" class="view">
       <div class="login-wrap">
         <div class="login-card panel">
@@ -1044,15 +1220,29 @@
             <button class="secondary" id="btnTermReconnect">重连</button>
             <button class="danger" id="btnTermDisconnect">断开</button>
           </div>
-          <div>
+          <div class="terminal-meta">
             <h2 id="termTitle" style="font-size:15px">Terminal</h2>
             <div id="termMeta" class="muted" style="font-size:12px">session: -</div>
+            <div class="terminal-status">
+              <span id="termConn" class="pill term-conn disconnected">未连接</span>
+              <span id="termCursor" class="pill term-cursor">光标 -:-</span>
+            </div>
           </div>
         </header>
 
         <div class="terminal-card panel">
           <div id="termHost" class="term-host"></div>
           <div id="termHint" class="term-hint">Web terminal 已接入 xterm 本地资源，目标交互与本地终端保持一致。</div>
+          <div id="termMobileKeys" class="term-mobile-keys" aria-label="终端快捷键">
+            <button class="secondary" data-term-key="esc" type="button">Esc</button>
+            <button class="secondary" data-term-key="tab" type="button">Tab</button>
+            <button class="secondary" data-term-key="ctrlc" type="button">Ctrl+C</button>
+            <button class="secondary" data-term-key="ctrld" type="button">Ctrl+D</button>
+            <button class="secondary" data-term-key="up" type="button">↑</button>
+            <button class="secondary" data-term-key="down" type="button">↓</button>
+            <button class="secondary" data-term-key="left" type="button">←</button>
+            <button class="secondary" data-term-key="right" type="button">→</button>
+          </div>
         </div>
       </div>
     </section>
@@ -1175,8 +1365,122 @@
     let fitAddon = null;
     let basicOut = null;
     let termWs = null;
+    let pendingTermOutput = '';
+    let termFlushTimer = 0;
+    let resizeRafId = 0;
+    let cursorRafId = 0;
+    let viewportRafId = 0;
+    let resizeObserver = null;
     let liveRefreshRunning = false;
     let liveRefreshQueued = false;
+
+    function setTermConnection(status, label = '') {
+      const pill = $('termConn');
+      if (!pill) return;
+      const normalized = String(status || 'disconnected');
+      const map = {
+        connected: '已连接',
+        connecting: '连接中',
+        disconnected: '未连接',
+        error: '连接异常',
+      };
+      pill.className = 'pill term-conn ' + normalized;
+      pill.textContent = label || map[normalized] || normalized;
+    }
+
+    function updateTermCursorIndicator() {
+      const pill = $('termCursor');
+      if (!pill) return;
+      if (termMode === 'xterm' && term && term.buffer && term.buffer.active) {
+        const row = term.buffer.active.cursorY + 1;
+        const col = term.buffer.active.cursorX + 1;
+        pill.textContent = '光标 ' + row + ':' + col;
+        return;
+      }
+      pill.textContent = '光标 -:-';
+    }
+
+    function scheduleCursorRefresh() {
+      if (cursorRafId) return;
+      const raf = typeof requestAnimationFrame === 'function'
+        ? requestAnimationFrame
+        : (fn) => setTimeout(fn, 16);
+      cursorRafId = raf(() => {
+        cursorRafId = 0;
+        updateTermCursorIndicator();
+      });
+    }
+
+    function flushTermOutput() {
+      termFlushTimer = 0;
+      const chunk = pendingTermOutput;
+      pendingTermOutput = '';
+      if (!chunk) return;
+      if (termMode === 'xterm' && term) {
+        term.write(chunk, () => scheduleCursorRefresh());
+      } else if (termMode === 'basic' && basicOut) {
+        const next = (basicOut.textContent || '') + chunk;
+        basicOut.textContent = next.length > BASIC_TERM_MAX_CHARS ? next.slice(-BASIC_TERM_MAX_CHARS) : next;
+        basicOut.scrollTop = basicOut.scrollHeight;
+      }
+    }
+
+    function queueTermOutput(text) {
+      const val = String(text || '');
+      if (!val) return;
+      pendingTermOutput += val;
+      if (termFlushTimer) return;
+      const raf = typeof requestAnimationFrame === 'function'
+        ? requestAnimationFrame
+        : (fn) => setTimeout(fn, 16);
+      termFlushTimer = raf(() => flushTermOutput());
+    }
+
+    function setViewportHeight() {
+      const root = document.documentElement;
+      if (!root) return;
+      let height = window.innerHeight;
+      if (window.visualViewport && Number.isFinite(window.visualViewport.height)) {
+        height = Math.max(320, Math.floor(window.visualViewport.height));
+      }
+      root.style.setProperty('--app-height', height + 'px');
+    }
+
+    function detectKeyboardOpen() {
+      if (!window.visualViewport) return false;
+      const layoutHeight = window.innerHeight;
+      const visualHeight = window.visualViewport.height;
+      if (!layoutHeight || !visualHeight) return false;
+      return (layoutHeight - visualHeight) > 110;
+    }
+
+    function applyViewportState() {
+      setViewportHeight();
+      document.body.classList.toggle('keyboard-open', detectKeyboardOpen() && state.view === 'terminal');
+    }
+
+    function scheduleViewportRefresh() {
+      if (viewportRafId) return;
+      const raf = typeof requestAnimationFrame === 'function'
+        ? requestAnimationFrame
+        : (fn) => setTimeout(fn, 16);
+      viewportRafId = raf(() => {
+        viewportRafId = 0;
+        applyViewportState();
+        scheduleResizeSync();
+      });
+    }
+
+    function scheduleResizeSync() {
+      if (resizeRafId) return;
+      const raf = typeof requestAnimationFrame === 'function'
+        ? requestAnimationFrame
+        : (fn) => setTimeout(fn, 16);
+      resizeRafId = raf(() => {
+        resizeRafId = 0;
+        sendResize();
+      });
+    }
 
     function queueLiveRefresh() {
       if (liveRefreshRunning) {
@@ -1257,8 +1561,18 @@
       $('settingsView').classList.toggle('hidden', next !== 'settings');
       $('runnerDetailView').classList.toggle('hidden', next !== 'runnerDetail');
       $('terminalView').classList.toggle('hidden', next !== 'terminal');
-
-      if (next !== 'terminal') disconnectTerminal(false);
+      const inTerminal = next === 'terminal';
+      document.body.classList.toggle('terminal-active', inTerminal);
+      $('appRoot').classList.toggle('terminal-mode', inTerminal);
+      if (!inTerminal) {
+        disconnectTerminal(false);
+        setTermConnection('disconnected');
+      } else {
+        setTermConnection('connecting');
+        scheduleCursorRefresh();
+        scheduleResizeSync();
+      }
+      applyViewportState();
       ensureAutoRefresh();
     }
 
@@ -1315,6 +1629,9 @@
       $('runnerSearch').value = '';
       $('sessionSearch').value = '';
       setLoginTotpMode(false);
+      setTermConnection('disconnected');
+      updateTermCursorIndicator();
+      applyViewportState();
     }
 
     async function api(method, path, body) {
@@ -1943,30 +2260,52 @@
     }
 
     function termReset() {
+      pendingTermOutput = '';
+      if (termFlushTimer) {
+        try { if (typeof cancelAnimationFrame === 'function') cancelAnimationFrame(termFlushTimer); } catch {}
+        clearTimeout(termFlushTimer);
+        termFlushTimer = 0;
+      }
       if (termMode === 'xterm' && term) {
         term.reset();
+        scheduleCursorRefresh();
         return;
       }
       if (termMode === 'basic' && basicOut) basicOut.textContent = '';
+      updateTermCursorIndicator();
     }
 
     function termWrite(text) {
-      const val = String(text || '');
-      if (termMode === 'xterm' && term) {
-        term.write(val);
-        return;
-      }
-      if (termMode === 'basic' && basicOut) {
-        const next = (basicOut.textContent || '') + val;
-        basicOut.textContent = next.length > BASIC_TERM_MAX_CHARS ? next.slice(-BASIC_TERM_MAX_CHARS) : next;
-        basicOut.scrollTop = basicOut.scrollHeight;
-      }
+      queueTermOutput(text);
     }
 
     function sendTermInput(raw) {
       if (!termWs || termWs.readyState !== 1) return;
       const bytes = termEncoder.encode(String(raw || ''));
       if (bytes.length) termWs.send(bytes);
+      if (termMode === 'xterm' && term) {
+        try { term.focus(); } catch {}
+      }
+    }
+
+    function sendCtrlChar(letter) {
+      const upper = String(letter || '').toUpperCase();
+      if (!upper || upper.length !== 1) return;
+      const code = upper.charCodeAt(0);
+      if (code < 65 || code > 90) return;
+      sendTermInput(String.fromCharCode(code - 64));
+    }
+
+    function sendMobileTermKey(action) {
+      const key = String(action || '').toLowerCase();
+      if (key === 'esc') { sendTermInput('\x1b'); return; }
+      if (key === 'tab') { sendTermInput('\t'); return; }
+      if (key === 'ctrlc') { sendCtrlChar('C'); return; }
+      if (key === 'ctrld') { sendCtrlChar('D'); return; }
+      if (key === 'up') { sendTermInput('\x1b[A'); return; }
+      if (key === 'down') { sendTermInput('\x1b[B'); return; }
+      if (key === 'right') { sendTermInput('\x1b[C'); return; }
+      if (key === 'left') { sendTermInput('\x1b[D'); return; }
     }
 
     function setupBasicTerminal() {
@@ -2024,6 +2363,7 @@
       host.appendChild(wrap);
       basicOut = out;
       termMode = 'basic';
+      updateTermCursorIndicator();
       termWrite('[basic terminal mode enabled]\r\n');
     }
 
@@ -2036,13 +2376,20 @@
         return;
       }
 
+      const compact = window.matchMedia && window.matchMedia('(max-width: 780px)').matches;
       term = new Terminal({
         cursorBlink: true,
+        cursorStyle: 'block',
+        cursorInactiveStyle: 'outline',
         fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Courier New", monospace',
-        fontSize: 13,
+        fontSize: compact ? 14 : 13,
+        allowTransparency: false,
         theme: {
           background: '#020617',
           foreground: '#e2e8f0',
+          cursor: '#22d3ee',
+          cursorAccent: '#020617',
+          selectionBackground: 'rgba(56, 189, 248, 0.36)',
         },
         scrollback: 5000,
       });
@@ -2052,19 +2399,33 @@
       fitAddon.fit();
       termMode = 'xterm';
       term.onData((data) => sendTermInput(data));
+      term.onCursorMove(() => scheduleCursorRefresh());
+      host.addEventListener('click', () => {
+        try { term.focus(); } catch {}
+      });
+      host.addEventListener('touchstart', () => {
+        try { term.focus(); } catch {}
+      }, { passive: true });
+      scheduleCursorRefresh();
     }
 
     function sendResize() {
-      if (!termWs || termWs.readyState !== 1) return;
       if (termMode === 'xterm' && fitAddon) fitAddon.fit();
+      scheduleCursorRefresh();
+      if (!termWs || termWs.readyState !== 1) return;
       termWs.send(JSON.stringify({ type: 'resize', cols: getTermCols(), rows: getTermRows() }));
     }
 
     function bindResizeHooks() {
-      window.addEventListener('resize', () => sendResize());
+      window.addEventListener('resize', () => scheduleViewportRefresh());
+      window.addEventListener('orientationchange', () => scheduleViewportRefresh());
+      if (window.visualViewport) {
+        window.visualViewport.addEventListener('resize', () => scheduleViewportRefresh());
+        window.visualViewport.addEventListener('scroll', () => scheduleViewportRefresh());
+      }
       if (typeof ResizeObserver !== 'undefined') {
-        const obs = new ResizeObserver(() => sendResize());
-        obs.observe($('termHost'));
+        resizeObserver = new ResizeObserver(() => scheduleResizeSync());
+        resizeObserver.observe($('termHost'));
       }
     }
 
@@ -2073,6 +2434,7 @@
         try { termWs.close(); } catch {}
       }
       termWs = null;
+      setTermConnection('disconnected');
       if (showHint) termWrite('\r\n[disconnected]\r\n');
     }
 
@@ -2091,6 +2453,7 @@
 
     async function connectTerminal(sessionId) {
       termReset();
+      setTermConnection('connecting');
       termWrite('[connecting...]\r\n');
 
       let token = '';
@@ -2098,22 +2461,26 @@
         const grant = await api('POST', '/api/sessions/' + encodeURIComponent(sessionId) + '/terminal-token', {});
         token = String(grant && grant.token ? grant.token : '');
       } catch (e) {
+        setTermConnection('error');
         termWrite('[terminal token failed: ' + String((e && e.data && e.data.error) || (e && e.message) || 'unknown') + ']\r\n');
         throw e;
       }
 
       if (!token) {
+        setTermConnection('error');
         termWrite('[terminal token missing]\r\n');
         return;
       }
 
       disconnectTerminal(false);
+      setTermConnection('connecting');
       termWs = new WebSocket(termWsUrl(sessionId), 'token.' + token);
       termWs.binaryType = 'arraybuffer';
 
       termWs.onopen = () => {
+        setTermConnection('connected');
         termWrite('[connected]\r\n');
-        sendResize();
+        scheduleResizeSync();
         if (termMode === 'xterm' && term) term.focus();
       };
       termWs.onmessage = (ev) => {
@@ -2131,8 +2498,14 @@
         }
         if (typeof ev.data === 'string') termWrite(ev.data);
       };
-      termWs.onclose = () => termWrite('\r\n[disconnected]\r\n');
-      termWs.onerror = () => termWrite('\r\n[ws error]\r\n');
+      termWs.onclose = () => {
+        setTermConnection('disconnected');
+        termWrite('\r\n[disconnected]\r\n');
+      };
+      termWs.onerror = () => {
+        setTermConnection('error');
+        termWrite('\r\n[ws error]\r\n');
+      };
     }
 
     function updateTerminalHeader(session) {
@@ -2265,28 +2638,6 @@
 
       $('totpActionResult').textContent = '操作不支持';
       return;
-
-        if (kind === 'disable') {
-          $('totpActionResult').textContent = '已删除两步验证。';
-        } else {
-          $('totpActionResult').textContent = '已提交，需重新登录。';
-        }
-
-        if (resp && resp.needSetup) {
-          $('totpActionResult').textContent = '已提交：请打开 /setup 重新绑定。';
-        }
-
-        if (resp && resp.relogin) {
-          await doLogout();
-        } else {
-          try { await refreshAuth(); } catch {}
-          try { await refreshSettings(); } catch {}
-        }
-      } catch (e) {
-        $('totpActionResult').textContent = String((e && e.data && e.data.error) || (e && e.message) || '操作失败');
-      } finally {
-        try { $('totpCode').value = ''; } catch {}
-      }
     }
 
     async function doLogin(ev) {
@@ -2382,9 +2733,19 @@
         await connectTerminal(state.activeSession.id);
       };
       $('btnTermDisconnect').onclick = () => disconnectTerminal(true);
+
+      $('termMobileKeys').addEventListener('click', (ev) => {
+        const target = ev.target instanceof Element ? ev.target.closest('button[data-term-key]') : null;
+        if (!target) return;
+        ev.preventDefault();
+        sendMobileTermKey(target.getAttribute('data-term-key') || '');
+      });
     }
 
     async function bootstrap() {
+      applyViewportState();
+      setTermConnection('disconnected');
+      updateTermCursorIndicator();
       initTerminal();
       bindResizeHooks();
       bindUiEvents();

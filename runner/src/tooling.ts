@@ -177,6 +177,39 @@ export function supportedToolsFrom(availability: ToolAvailability): Set<ToolName
   return out;
 }
 
+export function applySessionBackendConstraints(
+  detected: ToolDetectionResult,
+  requirements: { tmuxAvailable: boolean },
+): ToolDetectionResult {
+  if (requirements.tmuxAvailable) return detected;
+
+  const tools = { ...detected.tools } as ToolAvailability;
+  const toolDetails = { ...detected.toolDetails } as ToolCapabilityDetails;
+  for (const tool of TOOL_ORDER) {
+    tools[tool] = false;
+    const detail = toolDetails[tool];
+    const baseReason = detail.reason ? `${detail.reason}; ` : '';
+    toolDetails[tool] = {
+      ...detail,
+      available: false,
+      reason: `${baseReason}tmux is required on the runner host`,
+    };
+  }
+
+  const unsupported = TOOL_ORDER.map((tool) => ({
+    tool,
+    source: toolDetails[tool].source,
+    command: toolDetails[tool].command,
+    reason: toolDetails[tool].reason || 'unavailable',
+  }));
+
+  return {
+    tools,
+    toolDetails,
+    unsupported,
+  };
+}
+
 export function detectToolCapabilities(
   toolCommands: ToolCommandMap,
   env: NodeJS.ProcessEnv = process.env,

@@ -7,6 +7,7 @@ MVP goal: browser -> gateway -> runner -> persistent tmux session.
 ## Runtime Requirement
 
 - Node.js 22+
+- tmux 3+ on runner hosts
 
 ## Security Baseline
 
@@ -28,6 +29,7 @@ MVP goal: browser -> gateway -> runner -> persistent tmux session.
 ## Tool Support
 
 - Runner now auto-detects local CLI availability for `codex`, `claude`, and `gemini`.
+- Runner session backend is tmux-first to avoid PTY runtime incompatibilities on some hosts.
 - Gemini resolution order: `AGENTMESH_GEMINI_CMD` -> `gemini` -> `npx -y @google/gemini-cli`.
 - Gateway enforces runner-reported tool capabilities when creating/starting sessions.
 - UI tool selector is driven by runner capabilities (priority: `codex`, `claude`, `gemini`).

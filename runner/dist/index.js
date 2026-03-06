@@ -6,7 +6,7 @@ import { WebSocket } from 'ws';
 import { Buffer } from 'node:buffer';
 import { loadIdentity, saveIdentity } from './state.js';
 import { spawnCodexPty, resizePty, killPty } from './pty.js';
-import { detectToolCapabilities, resolveToolCommands, supportedToolsFrom, } from './tooling.js';
+import { applySessionBackendConstraints, commandExists, detectToolCapabilities, resolveToolCommands, supportedToolsFrom, } from './tooling.js';
 let gatewayHttp = process.env.AGENTMESH_GATEWAY_HTTP || 'http://127.0.0.1:8787';
 let gatewayWs = process.env.AGENTMESH_GATEWAY_WS || gatewayHttp.replace(/^http/, 'ws');
 const RUNNER_NAME = process.env.AGENTMESH_RUNNER_NAME || os.hostname();
@@ -110,7 +110,9 @@ async function enrollRunner(enrollCode) {
     return id;
 }
 function detectCapabilities() {
-    const { tools, toolDetails, unsupported } = detectToolCapabilities(toolCommands);
+    const tmuxAvailable = commandExists('tmux');
+    const detected = applySessionBackendConstraints(detectToolCapabilities(toolCommands), { tmuxAvailable });
+    const { tools, toolDetails, unsupported } = detected;
     if (unsupported.length) {
         console.log('[runner] tool unavailable on this host', { unsupported });
     }
@@ -118,7 +120,7 @@ function detectCapabilities() {
         tools,
         toolDetails,
         features: {
-            tmux: true,
+            tmux: commandExists('tmux'),
         },
         platform: {
             os: process.platform,

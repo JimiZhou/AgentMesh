@@ -6,6 +6,7 @@ import { WebSocket } from 'ws';
 import { Buffer } from 'node:buffer';
 import { loadIdentity, saveIdentity } from './state.js';
 import { spawnCodexPty, resizePty, killPty } from './pty.js';
+import { detectToolCapabilities, resolveToolCommands, supportedToolsFrom, } from './tooling.js';
 let gatewayHttp = process.env.AGENTMESH_GATEWAY_HTTP || 'http://127.0.0.1:8787';
 let gatewayWs = process.env.AGENTMESH_GATEWAY_WS || gatewayHttp.replace(/^http/, 'ws');
 const RUNNER_NAME = process.env.AGENTMESH_RUNNER_NAME || os.hostname();
@@ -17,8 +18,10 @@ const WS_FLUSH_BATCH = 48;
 const WS_BACKPRESSURE_LIMIT = 256 * 1024;
 const WS_QUEUE_LIMIT_BYTES = 2 * 1024 * 1024;
 const PTY_CHUNK_BYTES = 4096;
-const SUPPORTED_TOOLS = new Set(['codex', 'claude', 'gemini']);
 const METRICS_HEARTBEAT_MS = Number(process.env.AGENTMESH_RUNNER_METRICS_HEARTBEAT_MS || 5000);
+let toolCommands = resolveToolCommands();
+let localCapabilities = detectCapabilities();
+let supportedTools = supportedToolsFrom(localCapabilities.tools);
 gatewayHttp = gatewayHttp.trim().replace(/\/+$/, '');
 gatewayWs = gatewayWs.trim().replace(/\/+$/, '');
 function sleep(ms) {
@@ -55,10 +58,11 @@ function parseEnrollCode(rawCode) {
     return payload;
 }
 async function registerRunner() {
+    const capabilities = refreshLocalCapabilities();
     const res = await fetch(`${gatewayHttp}/api/runners/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: RUNNER_NAME, capabilities: detectCapabilities() }),
+        body: JSON.stringify({ name: RUNNER_NAME, capabilities }),
     });
     if (!res.ok) {
         const text = await res.text();
@@ -72,6 +76,7 @@ async function registerRunner() {
     return id;
 }
 async function enrollRunner(enrollCode) {
+    const capabilities = refreshLocalCapabilities();
     const payload = parseEnrollCode(enrollCode);
     if (typeof payload.gatewayHttp === 'string' && payload.gatewayHttp.trim()) {
         gatewayHttp = normalizeGatewayUrl(payload.gatewayHttp);
@@ -88,7 +93,7 @@ async function enrollRunner(enrollCode) {
     const res = await fetch(`${gatewayHttp}/api/runners/enroll`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token: payload.token, name: RUNNER_NAME, capabilities: detectCapabilities() }),
+        body: JSON.stringify({ token: payload.token, name: RUNNER_NAME, capabilities }),
     });
     if (!res.ok) {
         const text = await res.text();
@@ -105,12 +110,13 @@ async function enrollRunner(enrollCode) {
     return id;
 }
 function detectCapabilities() {
+    const { tools, toolDetails, unsupported } = detectToolCapabilities(toolCommands);
+    if (unsupported.length) {
+        console.log('[runner] tool unavailable on this host', { unsupported });
+    }
     return {
-        tools: {
-            codex: true,
-            claude: true,
-            gemini: true,
-        },
+        tools,
+        toolDetails,
         features: {
             tmux: true,
         },
@@ -119,6 +125,12 @@ function detectCapabilities() {
             arch: process.arch,
         },
     };
+}
+function refreshLocalCapabilities() {
+    toolCommands = resolveToolCommands();
+    localCapabilities = detectCapabilities();
+    supportedTools = supportedToolsFrom(localCapabilities.tools);
+    return localCapabilities;
 }
 async function ensureIdentity() {
     const existing = loadIdentity(ID_FILE);
@@ -180,6 +192,7 @@ async function connectLoop() {
                 ws.once('open', () => resolve());
                 ws.once('error', (e) => reject(e));
             });
+            refreshLocalCapabilities();
             attempt = 0;
             console.log('[runner] ws connected');
             let wsClosed = false;
@@ -268,7 +281,7 @@ async function connectLoop() {
                 }
                 console.log(`[runner] ws closed code=${code} reason=${reason?.toString() || ''}`);
             });
-            ws.send(JSON.stringify({ type: 'capabilities', capabilities: detectCapabilities(), ts: Date.now() }));
+            ws.send(JSON.stringify({ type: 'capabilities', capabilities: localCapabilities, ts: Date.now() }));
             metricsTimer = setInterval(() => {
                 if (wsClosed || ws.readyState !== WebSocket.OPEN)
                     return;
@@ -324,12 +337,18 @@ async function connectLoop() {
                     console.log('[runner] got start_session', msg);
                     try {
                         const sessionId = String(msg.sessionId || '');
-                        const tool = String(msg.tool || '');
+                        const tool = String(msg.tool || '').toLowerCase();
                         const projectPath = resolveProjectPath(msg.projectPath);
                         const cols = Number(msg.cols || 120);
                         const rows = Number(msg.rows || 34);
-                        if (!sessionId || !SUPPORTED_TOOLS.has(tool)) {
-                            ws.send(JSON.stringify({ type: 'start_session_result', ok: false, sessionId, error: 'unsupported tool' }));
+                        if (!sessionId || !supportedTools.has(tool)) {
+                            const supportedList = Array.from(supportedTools.values()).join('|') || 'none';
+                            ws.send(JSON.stringify({
+                                type: 'start_session_result',
+                                ok: false,
+                                sessionId,
+                                error: `unsupported tool: ${tool || '<empty>'}; supported=${supportedList}`,
+                            }));
                             return;
                         }
                         if (sessions.has(sessionId)) {
@@ -344,7 +363,7 @@ async function connectLoop() {
                             enqueuePtyData(sessionId, chunk);
                         });
                         // Start tool *after* onData is wired so we don't miss the initial screen.
-                        ps.pty.write(`${tool}\r`);
+                        ps.pty.write(`${toolCommands[tool].command}\r`);
                         ps.pty.onExit(() => {
                             sessions.delete(sessionId);
                             sessionTools.delete(sessionId);

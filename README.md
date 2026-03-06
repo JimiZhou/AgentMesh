@@ -25,6 +25,25 @@ MVP goal: browser -> gateway -> runner -> persistent tmux session.
 4. Start runner with enroll code:
    `AGENTMESH_ENROLL_CODE='<enroll-code>' npm --prefix runner run dev`
 
+## Tool Support
+
+- Runner now auto-detects local CLI availability for `codex`, `claude`, and `gemini`.
+- Gemini resolution order: `AGENTMESH_GEMINI_CMD` -> `gemini` -> `npx -y @google/gemini-cli`.
+- Gateway enforces runner-reported tool capabilities when creating/starting sessions.
+- UI tool selector is driven by runner capabilities (priority: `codex`, `claude`, `gemini`).
+- Runner capability payload includes per-tool details (`command/source/available/reason`) for diagnostics.
+
+Environment overrides (runner):
+
+- Force enable/disable tools:
+  - `AGENTMESH_TOOL_CODEX=1|0`
+  - `AGENTMESH_TOOL_CLAUDE=1|0`
+  - `AGENTMESH_TOOL_GEMINI=1|0`
+- Override executable command names:
+  - `AGENTMESH_CODEX_CMD`
+  - `AGENTMESH_CLAUDE_CMD`
+  - `AGENTMESH_GEMINI_CMD`
+
 ## Repository Hygiene
 
 - Tracked examples:

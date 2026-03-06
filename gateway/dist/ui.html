@@ -930,6 +930,12 @@
         </div>
 
         <div id="cleanupResult" class="muted" style="font-size:13px"></div>
+        <section class="panel" style="padding:12px 14px">
+          <div class="field">
+            <label for="runnerSearch">筛选 Runner</label>
+            <input id="runnerSearch" placeholder="按名称、runnerId、能力搜索" />
+          </div>
+        </section>
         <main id="runnerList" class="runner-grid"></main>
       </div>
     </section>
@@ -993,6 +999,7 @@
           <section class="detail-card panel">
             <h3>Runner 能力</h3>
             <div id="detailTools" class="tools"></div>
+            <div id="detailToolHint" class="muted hidden" style="font-size:12px;margin-top:6px"></div>
             <pre id="detailCapabilities" class="cap-box hidden"></pre>
 
             <h3>新建会话</h3>
@@ -1018,6 +1025,10 @@
 
           <section class="detail-card panel">
             <h3>历史会话</h3>
+            <div class="field">
+              <label for="sessionSearch">筛选会话</label>
+              <input id="sessionSearch" placeholder="按 sessionId、tool、status、path 搜索" />
+            </div>
             <div id="detailSessionSummary" class="muted" style="font-size:13px">-</div>
             <div id="detailSessionList" class="session-list"></div>
           </section>
@@ -1081,6 +1092,11 @@
       runnerDetail: null,
       activeSession: null,
       autoRefreshTimer: null,
+      eventSource: null,
+      eventRetryTimer: null,
+      eventRetryAttempt: 0,
+      runnerSearch: '',
+      sessionSearch: '',
     };
 
     function setEmptyText(el, text) {
@@ -1152,12 +1168,87 @@
     const DEFAULT_TERM_COLS = 120;
     const DEFAULT_TERM_ROWS = 34;
     const BASIC_TERM_MAX_CHARS = 200000;
+    const TOOL_ORDER = ['codex', 'claude', 'gemini'];
 
     let termMode = 'none';
     let term = null;
     let fitAddon = null;
     let basicOut = null;
     let termWs = null;
+    let liveRefreshRunning = false;
+    let liveRefreshQueued = false;
+
+    function queueLiveRefresh() {
+      if (liveRefreshRunning) {
+        liveRefreshQueued = true;
+        return;
+      }
+      liveRefreshRunning = true;
+
+      let task = null;
+      if (state.view === 'workspace') {
+        task = refreshRunnerList(false);
+      } else if (state.view === 'runnerDetail' && state.selectedRunnerId) {
+        task = refreshRunnerDetail(false);
+      }
+
+      Promise.resolve(task)
+        .catch(() => {})
+        .finally(() => {
+          liveRefreshRunning = false;
+          if (liveRefreshQueued) {
+            liveRefreshQueued = false;
+            queueLiveRefresh();
+          }
+        });
+    }
+
+    function closeEventStream(resetRetry = true) {
+      if (state.eventRetryTimer) {
+        clearTimeout(state.eventRetryTimer);
+        state.eventRetryTimer = null;
+      }
+      if (resetRetry) state.eventRetryAttempt = 0;
+      if (state.eventSource) {
+        try { state.eventSource.close(); } catch {}
+        state.eventSource = null;
+      }
+    }
+
+    function scheduleEventStreamReconnect() {
+      if (!state.auth.authenticated || state.view === 'terminal' || state.view === 'settings') return;
+      if (state.eventRetryTimer) return;
+      const delay = Math.min(15000, Math.max(600, 600 * (2 ** state.eventRetryAttempt)));
+      state.eventRetryAttempt += 1;
+      state.eventRetryTimer = setTimeout(() => {
+        state.eventRetryTimer = null;
+        ensureEventStream();
+      }, delay);
+    }
+
+    function ensureEventStream() {
+      if (!state.auth.authenticated || state.view === 'terminal' || state.view === 'settings') {
+        closeEventStream();
+        return;
+      }
+      if (state.eventSource) return;
+      if (typeof EventSource === 'undefined') return;
+
+      const es = new EventSource('/api/events/stream');
+      state.eventSource = es;
+
+      const onData = () => {
+        state.eventRetryAttempt = 0;
+        queueLiveRefresh();
+      };
+
+      es.addEventListener('connected', onData);
+      es.addEventListener('update', onData);
+      es.onerror = () => {
+        closeEventStream(false);
+        scheduleEventStreamReconnect();
+      };
+    }
 
     function showView(next) {
       state.view = next;
@@ -1176,16 +1267,18 @@
         clearInterval(state.autoRefreshTimer);
         state.autoRefreshTimer = null;
       }
-      if (!state.auth.authenticated || state.view === 'terminal' || state.view === 'settings') return;
+      if (!state.auth.authenticated || state.view === 'terminal' || state.view === 'settings') {
+        closeEventStream();
+        return;
+      }
+
+      if (typeof EventSource !== 'undefined') {
+        ensureEventStream();
+        return;
+      }
 
       state.autoRefreshTimer = setInterval(() => {
-        if (state.view === 'workspace') {
-          refreshRunnerList(false).catch(() => {});
-          return;
-        }
-        if (state.view === 'runnerDetail' && state.selectedRunnerId) {
-          refreshRunnerDetail(false).catch(() => {});
-        }
+        queueLiveRefresh();
       }, 6000);
     }
 
@@ -1207,11 +1300,20 @@
     }
 
     function resetAuth() {
+      closeEventStream();
+      if (state.autoRefreshTimer) {
+        clearInterval(state.autoRefreshTimer);
+        state.autoRefreshTimer = null;
+      }
       setAuth({ authenticated: false, user: '', csrfToken: '', expiresAt: 0 });
       state.runnersAll = [];
       state.runnerDetail = null;
       state.selectedRunnerId = '';
       state.activeSession = null;
+      state.runnerSearch = '';
+      state.sessionSearch = '';
+      $('runnerSearch').value = '';
+      $('sessionSearch').value = '';
       setLoginTotpMode(false);
     }
 
@@ -1263,25 +1365,217 @@
       catch { return '-'; }
     }
 
+    function normalizeSearch(raw) {
+      return String(raw || '').trim().toLowerCase();
+    }
+
+    function shellQuoteSingle(raw) {
+      return "'" + String(raw || '').replace(/'/g, "'\\''") + "'";
+    }
+
+    function buildClaudeResumeCommand(session) {
+      if (!session || String(session.tool || '').toLowerCase() !== 'claude') return '';
+      const sessionId = String(session.id || '').trim();
+      if (!sessionId) return '';
+      const projectPath = typeof session.projectPath === 'string' ? session.projectPath.trim() : '';
+      if (!projectPath) return 'claude --resume ' + sessionId;
+      return 'cd ' + shellQuoteSingle(projectPath) + ' && claude --resume ' + sessionId;
+    }
+
+    function buildGeminiLaunchCommand(session, runner) {
+      if (!session || String(session.tool || '').toLowerCase() !== 'gemini') return '';
+      const detail = getRunnerToolDetail(runner, 'gemini');
+      const command = detail && detail.command ? detail.command : 'gemini';
+      const projectPath = typeof session.projectPath === 'string' ? session.projectPath.trim() : '';
+      if (!projectPath) return command;
+      return 'cd ' + shellQuoteSingle(projectPath) + ' && ' + command;
+    }
+
+    function runnerMatchesSearch(runner, query) {
+      if (!query) return true;
+      const name = String(runner && runner.name ? runner.name : '').toLowerCase();
+      const id = String(runner && runner.id ? runner.id : '').toLowerCase();
+      const tools = runnerSupportedTools(runner)
+        .map((x) => String(x || '').toLowerCase())
+        .join(' ');
+      const status = runner && runner.online ? 'online 在线' : 'offline 离线';
+      const geminiDetail = getRunnerToolDetail(runner, 'gemini');
+      const geminiHint = [
+        geminiDetail && geminiDetail.command,
+        geminiDetail && geminiDetail.source,
+        geminiDetail && geminiDetail.reason,
+        geminiDetail ? (geminiDetail.available ? 'available 可用' : 'unavailable 不可用') : '',
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+      return (
+        name.includes(query) ||
+        id.includes(query) ||
+        tools.includes(query) ||
+        status.includes(query) ||
+        geminiHint.includes(query)
+      );
+    }
+
+    function sessionMatchesSearch(session, query) {
+      if (!query) return true;
+      const values = [
+        session && session.id,
+        session && session.tool,
+        session && session.status,
+        session && session.projectPath,
+        session && session.createdBy,
+      ]
+        .map((x) => String(x || '').toLowerCase());
+      return values.some((x) => x.includes(query));
+    }
+
+    async function copyTextToClipboard(text) {
+      const val = String(text || '');
+      if (!val) throw new Error('empty text');
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(val);
+        return;
+      }
+      const input = document.createElement('textarea');
+      input.value = val;
+      input.setAttribute('readonly', 'readonly');
+      input.style.position = 'fixed';
+      input.style.opacity = '0';
+      document.body.appendChild(input);
+      input.select();
+      const copied = document.execCommand('copy');
+      document.body.removeChild(input);
+      if (!copied) throw new Error('copy failed');
+    }
+
+    async function copyClaudeResumeCommand(session) {
+      const command = buildClaudeResumeCommand(session);
+      if (!command) return;
+      try {
+        await copyTextToClipboard(command);
+        const hint = $('createSessionResult');
+        hint.textContent = '已复制：' + command;
+        setTimeout(() => {
+          if (hint.textContent === '已复制：' + command) hint.textContent = '';
+        }, 2200);
+      } catch (e) {
+        window.alert('复制失败: ' + String((e && e.message) || e || 'unknown'));
+      }
+    }
+
+    async function copyGeminiLaunchCommand(session, runner) {
+      const command = buildGeminiLaunchCommand(session, runner);
+      if (!command) return;
+      try {
+        await copyTextToClipboard(command);
+        const hint = $('createSessionResult');
+        hint.textContent = '已复制 Gemini 命令：' + command;
+        setTimeout(() => {
+          if (hint.textContent === '已复制 Gemini 命令：' + command) hint.textContent = '';
+        }, 2200);
+      } catch (e) {
+        window.alert('复制失败: ' + String((e && e.message) || e || 'unknown'));
+      }
+    }
+
     function toolsFromCapabilities(capabilities) {
       const tools = capabilities && capabilities.tools ? capabilities.tools : {};
       return Object.keys(tools).filter((k) => !!tools[k]);
     }
 
-    function renderRunnerList() {
-      const host = $('runnerList');
-      host.innerHTML = '';
-      $('runnerSummaryText').textContent =
-        '在线 ' + state.runnerSummary.online + ' 台 · 离线 ' + state.runnerSummary.offline + ' 台 · 总计 ' + state.runnerSummary.total + ' 台';
+    function toolDetailsFromCapabilities(capabilities) {
+      const raw = capabilities && capabilities.toolDetails && typeof capabilities.toolDetails === 'object'
+        ? capabilities.toolDetails
+        : {};
+      const details = {};
+      for (const tool of TOOL_ORDER) {
+        const item = raw[tool];
+        if (!item || typeof item !== 'object') continue;
+        details[tool] = {
+          command: typeof item.command === 'string' ? item.command : '',
+          source: typeof item.source === 'string' ? item.source : '',
+          available: item.available === true,
+          reason: typeof item.reason === 'string' ? item.reason : '',
+        };
+      }
+      return details;
+    }
 
-      if (!state.runnersAll.length) {
-        const empty = document.createElement('div');
-        empty.className = 'empty';
-        empty.textContent = '当前没有 runner。';
-        host.appendChild(empty);
+    function getRunnerToolDetail(runner, tool) {
+      const toolName = String(tool || '').toLowerCase();
+      if (!TOOL_ORDER.includes(toolName)) return null;
+      const details = toolDetailsFromCapabilities(runner && runner.capabilities);
+      return details[toolName] || null;
+    }
+
+    function buildGeminiDiagnosticText(runner) {
+      const detail = getRunnerToolDetail(runner, 'gemini');
+      if (!detail) return '';
+      if (detail.available) {
+        if (detail.source === 'fallback') {
+          return 'Gemini 可用：使用 npx fallback（' + detail.command + '）。';
+        }
+        if (detail.source === 'env') {
+          return 'Gemini 可用：使用 AGENTMESH_GEMINI_CMD（' + detail.command + '）。';
+        }
+        return 'Gemini 可用：命令 ' + detail.command + '。';
+      }
+      const reason = detail.reason ? detail.reason : 'runner 未检测到可执行命令';
+      return 'Gemini 不可用：' + reason + '。可安装 gemini CLI 或设置 AGENTMESH_GEMINI_CMD。';
+    }
+
+    function runnerSupportedTools(runner) {
+      const fromRunner = Array.isArray(runner && runner.supportedTools) ? runner.supportedTools : null;
+      if (fromRunner) {
+        const set = new Set(fromRunner.map((x) => String(x || '').toLowerCase()));
+        return TOOL_ORDER.filter((x) => set.has(x));
+      }
+      const fromCapabilities = toolsFromCapabilities(runner && runner.capabilities).map((x) => String(x || '').toLowerCase());
+      if (!fromCapabilities.length) return ['codex', 'claude'];
+      const set = new Set(fromCapabilities);
+      return TOOL_ORDER.filter((x) => set.has(x));
+    }
+
+    function refreshNewSessionToolOptions(runner) {
+      const select = $('newSessionTool');
+      const result = $('createSessionResult');
+      const prev = String(select.value || '').toLowerCase();
+      const supported = runnerSupportedTools(runner);
+      select.innerHTML = '';
+
+      if (!supported.length) {
+        const option = document.createElement('option');
+        option.value = '';
+        option.textContent = 'no supported tool';
+        select.appendChild(option);
+        select.disabled = true;
+        $('btnCreateSession').disabled = true;
+        result.textContent = '当前 runner 未上报可用工具，暂不可创建会话。';
         return;
       }
 
+      for (const tool of supported) {
+        const option = document.createElement('option');
+        option.value = tool;
+        option.textContent = tool;
+        select.appendChild(option);
+      }
+
+      select.disabled = false;
+      $('btnCreateSession').disabled = false;
+      if (supported.includes(prev)) {
+        select.value = prev;
+      } else {
+        select.value = supported[0];
+      }
+    }
+
+    function renderRunnerList() {
+      const host = $('runnerList');
+      host.innerHTML = '';
+      const query = normalizeSearch(state.runnerSearch);
       const all = [...state.runnersAll];
       all.sort((a, b) => {
         const ao = a.online ? 1 : 0;
@@ -1290,7 +1584,20 @@
         return Number(b.lastSeenAt || 0) - Number(a.lastSeenAt || 0);
       });
 
-      for (const [idx, runner] of all.entries()) {
+      const filtered = query ? all.filter((runner) => runnerMatchesSearch(runner, query)) : all;
+      $('runnerSummaryText').textContent =
+        '在线 ' + state.runnerSummary.online + ' 台 · 离线 ' + state.runnerSummary.offline + ' 台 · 总计 ' + state.runnerSummary.total + ' 台' +
+        (query ? (' · 匹配 ' + filtered.length + ' 台') : '');
+
+      if (!filtered.length) {
+        const empty = document.createElement('div');
+        empty.className = 'empty';
+        empty.textContent = query ? '没有匹配的 runner。' : '当前没有 runner。';
+        host.appendChild(empty);
+        return;
+      }
+
+      for (const [idx, runner] of filtered.entries()) {
         const card = document.createElement('button');
         card.className = 'runner-card';
         card.style.setProperty('--stagger', String(idx));
@@ -1311,7 +1618,7 @@
 
         const tools = document.createElement('div');
         tools.className = 'tools';
-        const toolList = toolsFromCapabilities(runner.capabilities);
+        const toolList = runnerSupportedTools(runner);
         if (!toolList.length) {
           const badge = document.createElement('span');
           badge.className = 'tool-badge';
@@ -1390,14 +1697,16 @@
       if (!detail || !detail.runner) return;
 
       const runner = detail.runner;
+      const supportedTools = runnerSupportedTools(runner);
       $('detailRunnerTitle').textContent = (runner.name || runner.id) + ' 详情';
       $('detailRunnerSub').textContent =
         (runner.online ? '在线' : '离线') +
-        ' · lastSeen ' + prettyTime(runner.lastSeenAt);
+        ' · lastSeen ' + prettyTime(runner.lastSeenAt) +
+        ' · tools ' + (supportedTools.length ? supportedTools.map((x) => toolLabel(x)).join('/') : 'none');
 
       const toolsHost = $('detailTools');
       toolsHost.innerHTML = '';
-      const tools = toolsFromCapabilities(runner.capabilities);
+      const tools = supportedTools;
       if (!tools.length) {
         const badge = document.createElement('span');
         badge.className = 'tool-badge';
@@ -1411,18 +1720,30 @@
           toolsHost.appendChild(badge);
         }
       }
+      const toolHint = $('detailToolHint');
+      const geminiHint = buildGeminiDiagnosticText(runner);
+      toolHint.textContent = geminiHint;
+      toolHint.classList.toggle('hidden', !geminiHint);
+      refreshNewSessionToolOptions(runner);
 
       // Hide raw capabilities JSON in production-like UI.
       $('detailCapabilities').textContent = '';
+      const allSessions = Array.isArray(detail.sessions) ? detail.sessions : [];
+      const sessionQuery = normalizeSearch(state.sessionSearch);
+      const sessions = sessionQuery
+        ? allSessions.filter((session) => sessionMatchesSearch(session, sessionQuery))
+        : allSessions;
       $('detailSessionSummary').textContent =
-        '总会话: ' + (detail.summary ? detail.summary.totalSessions : 0) +
-        ' | 活跃会话: ' + (detail.summary ? detail.summary.activeSessions : 0);
+        '总会话: ' + (detail.summary ? detail.summary.totalSessions : allSessions.length) +
+        ' | 活跃会话: ' + (detail.summary ? detail.summary.activeSessions : 0) +
+        (sessionQuery ? (' | 匹配: ' + sessions.length) : '');
 
       const host = $('detailSessionList');
       host.innerHTML = '';
-      const sessions = Array.isArray(detail.sessions) ? detail.sessions : [];
       if (!sessions.length) {
-        host.innerHTML = '<div class="empty">暂无会话，可在左侧创建新会话。</div>';
+        host.innerHTML = sessionQuery
+          ? '<div class="empty">没有匹配的会话。</div>'
+          : '<div class="empty">暂无会话，可在左侧创建新会话。</div>';
         return;
       }
 
@@ -1471,6 +1792,24 @@
         btnOpen.textContent = '进入 Terminal';
         btnOpen.onclick = () => openSession(session);
 
+        const resumeCommand = buildClaudeResumeCommand(session);
+        if (resumeCommand) {
+          const btnResume = document.createElement('button');
+          btnResume.className = 'secondary';
+          btnResume.textContent = '复制 Resume 命令';
+          btnResume.onclick = () => copyClaudeResumeCommand(session);
+          actions.appendChild(btnResume);
+        }
+
+        const geminiCommand = buildGeminiLaunchCommand(session, runner);
+        if (geminiCommand) {
+          const btnGemini = document.createElement('button');
+          btnGemini.className = 'secondary';
+          btnGemini.textContent = '复制 Gemini 命令';
+          btnGemini.onclick = () => copyGeminiLaunchCommand(session, runner);
+          actions.appendChild(btnGemini);
+        }
+
         const btnStop = document.createElement('button');
         btnStop.className = 'secondary';
         btnStop.textContent = '停止';
@@ -1515,6 +1854,8 @@
 
     async function openRunnerDetail(runnerId) {
       state.selectedRunnerId = runnerId;
+      state.sessionSearch = '';
+      $('sessionSearch').value = '';
       $('createSessionResult').textContent = '';
       showView('runnerDetail');
       await refreshRunnerDetail(true);
@@ -1528,6 +1869,9 @@
       $('createSessionResult').textContent = '';
       try {
         const tool = $('newSessionTool').value;
+        if (!tool) {
+          throw new Error('当前 runner 没有可用工具');
+        }
         const projectPath = $('newSessionPath').value.trim();
         const projectName = $('newSessionProjectName').value.trim();
         const body = {
@@ -1542,7 +1886,7 @@
       } catch (e) {
         $('createSessionResult').textContent = String((e && e.data && e.data.error) || (e && e.message) || '创建失败');
       } finally {
-        $('btnCreateSession').disabled = false;
+        $('btnCreateSession').disabled = $('newSessionTool').disabled;
       }
     }
 
@@ -2001,6 +2345,14 @@
       $('loginForm').addEventListener('submit', doLogin);
       $('btnLogout').onclick = () => doLogout();
       $('btnRefreshRunners').onclick = () => refreshRunnerList(true);
+      $('runnerSearch').addEventListener('input', (ev) => {
+        state.runnerSearch = String(ev.target && ev.target.value ? ev.target.value : '');
+        renderRunnerList();
+      });
+      $('sessionSearch').addEventListener('input', (ev) => {
+        state.sessionSearch = String(ev.target && ev.target.value ? ev.target.value : '');
+        renderRunnerDetail();
+      });
 
       $('btnOpenSettings').onclick = async () => {
         showView('settings');

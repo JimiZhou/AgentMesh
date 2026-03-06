@@ -54,6 +54,7 @@ async function startGateway({
   bootstrapPassword = 'IntegrationPassw0rd!!',
   configPayload,
   includeBootstrapPassword = true,
+  statePayload,
 } = {}) {
   const root = await mkdtemp(join(tmpdir(), 'agentmesh-gateway-test-'));
   const configFile = join(root, 'config.json');
@@ -79,7 +80,8 @@ async function startGateway({
   };
 
   await writeFile(configFile, JSON.stringify(configPayload || defaultConfig, null, 2));
-  await writeFile(stateFile, JSON.stringify({ runners: {}, projects: {}, sessions: {} }, null, 2));
+  const defaultState = { runners: {}, projects: {}, sessions: {} };
+  await writeFile(stateFile, JSON.stringify(statePayload || defaultState, null, 2));
 
   const env = {
     ...process.env,
@@ -275,4 +277,90 @@ test('gateway migrates legacy plaintext password to hash on startup', async (t) 
   assert.equal(loginRes.status, 200);
   const loginBody = await loginRes.json();
   assert.equal(loginBody.authenticated, true);
+});
+
+test('gateway rejects unsupported tools based on runner capabilities', async (t) => {
+  const now = Date.now();
+  const gateway = await startGateway({
+    statePayload: {
+      runners: {
+        runnerA: {
+          id: 'runnerA',
+          name: 'runner-A',
+          createdAt: now,
+          token: 'runner-token',
+          lastSeenAt: now,
+          capabilities: {
+            tools: {
+              codex: true,
+              claude: true,
+              gemini: false,
+            },
+          },
+        },
+      },
+      projects: {
+        projectA: {
+          id: 'projectA',
+          name: 'project-A',
+          createdAt: now,
+          runnerId: 'runnerA',
+          path: '/tmp/project-a',
+        },
+      },
+      sessions: {},
+    },
+  });
+  t.after(async () => {
+    await gateway.stop();
+  });
+  await gateway.waitUntilReady();
+
+  const loginRes = await fetch(`${gateway.baseUrl}/api/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      username: 'admin',
+      password: gateway.bootstrapPassword,
+    }),
+  });
+  assert.equal(loginRes.status, 200);
+  const loginBody = await loginRes.json();
+  assert.equal(loginBody.authenticated, true);
+  const cookie = parseCookie(loginRes.headers.get('set-cookie'));
+
+  const unsupportedRes = await fetch(`${gateway.baseUrl}/api/sessions`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      cookie,
+      'X-AgentMesh-CSRF': loginBody.csrfToken,
+    },
+    body: JSON.stringify({
+      projectId: 'projectA',
+      tool: 'gemini',
+    }),
+  });
+  assert.equal(unsupportedRes.status, 400);
+  const unsupportedBody = await unsupportedRes.json();
+  assert.equal(unsupportedBody.ok, false);
+  assert.match(String(unsupportedBody.error || ''), /not supported/i);
+
+  const supportedRes = await fetch(`${gateway.baseUrl}/api/sessions`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      cookie,
+      'X-AgentMesh-CSRF': loginBody.csrfToken,
+    },
+    body: JSON.stringify({
+      projectId: 'projectA',
+      tool: 'codex',
+    }),
+  });
+  assert.equal(supportedRes.status, 200);
+  const supportedBody = await supportedRes.json();
+  assert.equal(supportedBody.ok, true);
+  assert.equal(typeof supportedBody.sessionId, 'string');
+  assert.ok(supportedBody.sessionId.length > 5);
 });

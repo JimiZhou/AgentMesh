@@ -237,6 +237,9 @@ await registerAdminRoutes(app, {
 const store = new JsonStore(DATA_FILE);
 const sessionSnapshots = new Map();
 const sessionPtyBuffers = new Map();
+const uiSseClients = new Map();
+let uiUpdateVersion = 0;
+let uiUpdateFlushTimer = null;
 const sessionTerminalClients = new Map();
 const webSessions = new Map();
 const terminalGrants = new Map();
@@ -253,6 +256,7 @@ const TERMINAL_DROP_LOG_EVERY = 256;
 const LOGIN_WINDOW_MS = Number(process.env.AGENTMESH_LOGIN_WINDOW_MS || 10 * 60 * 1000);
 const LOGIN_MAX_ATTEMPTS = Number(process.env.AGENTMESH_LOGIN_MAX_ATTEMPTS || 10);
 const LOGIN_BLOCK_MS = Number(process.env.AGENTMESH_LOGIN_BLOCK_MS || 15 * 60 * 1000);
+const TOOL_ORDER = ['codex', 'claude', 'gemini'];
 // Ephemeral online tracking (WS-connected runners)
 const runnerOnline = new Set();
 const runnerConns = new Map();
@@ -573,6 +577,53 @@ function clearLoginFailures(req) {
 function requireSessionAccess(session, user) {
     return !session.createdBy || session.createdBy === user;
 }
+function writeSseEvent(res, event, payload) {
+    res.write(`event: ${event}\n`);
+    res.write(`data: ${JSON.stringify(payload)}\n\n`);
+}
+function closeUiSseClient(clientId) {
+    const client = uiSseClients.get(clientId);
+    if (!client || client.closed)
+        return;
+    client.closed = true;
+    clearInterval(client.heartbeat);
+    uiSseClients.delete(clientId);
+    try {
+        client.res.end();
+    }
+    catch {
+        // ignore close errors
+    }
+}
+function broadcastUiUpdate(nowTs = Date.now()) {
+    const payload = { ts: nowTs, version: uiUpdateVersion };
+    for (const [clientId, client] of uiSseClients.entries()) {
+        if (client.closed) {
+            uiSseClients.delete(clientId);
+            continue;
+        }
+        try {
+            writeSseEvent(client.res, 'update', payload);
+        }
+        catch {
+            closeUiSseClient(clientId);
+        }
+    }
+}
+function scheduleUiUpdate() {
+    uiUpdateVersion += 1;
+    if (uiUpdateFlushTimer)
+        return;
+    uiUpdateFlushTimer = setTimeout(() => {
+        uiUpdateFlushTimer = null;
+        broadcastUiUpdate();
+    }, 120);
+    uiUpdateFlushTimer.unref();
+}
+function patchStore(mutator) {
+    store.patch(mutator);
+    scheduleUiUpdate();
+}
 function encodeBinaryFrame(kind, sessionId, payload) {
     const sid = Buffer.from(sessionId, 'utf8');
     if (sid.length > 255)
@@ -612,10 +663,26 @@ function parseBoolFlag(value) {
     const raw = String(value ?? '').trim().toLowerCase();
     return raw === '1' || raw === 'true' || raw === 'yes' || raw === 'on';
 }
+function normalizeToolName(value) {
+    return String(value ?? '').trim().toLowerCase();
+}
+function getRunnerSupportedTools(runner) {
+    const rawTools = runner?.capabilities?.tools;
+    if (!rawTools || typeof rawTools !== 'object') {
+        return ['codex', 'claude'];
+    }
+    return TOOL_ORDER.filter((tool) => rawTools[tool] === true);
+}
+function runnerSupportsTool(runner, tool) {
+    if (!TOOL_ORDER.includes(tool))
+        return false;
+    return getRunnerSupportedTools(runner).includes(tool);
+}
 function sanitizeRunner(runner) {
     const { token, ...rest } = runner || {};
     return {
         ...rest,
+        supportedTools: getRunnerSupportedTools(rest),
         online: !!runnerOnline.has(rest.id),
     };
 }
@@ -652,12 +719,13 @@ function cleanupRunnerConnection(runnerId) {
     runnerOnline.delete(runnerId);
     runnerConns.delete(runnerId);
     runnerLastMetrics.delete(runnerId);
+    scheduleUiUpdate();
 }
 function getSession(sessionId) {
     return store.get().sessions[sessionId] || null;
 }
 function setSessionStatus(sessionId, patch) {
-    store.patch((s) => {
+    patchStore((s) => {
         const session = s.sessions[sessionId];
         if (!session)
             return;
@@ -791,7 +859,7 @@ function applyReconcileResult(runnerId, activeSessionsRaw) {
     }
     let updates = 0;
     const now = Date.now();
-    store.patch((s) => {
+    patchStore((s) => {
         for (const session of Object.values(s.sessions)) {
             if (session.runnerId !== runnerId)
                 continue;
@@ -1214,6 +1282,51 @@ app.get('/api/metrics', async (req, reply) => {
     setAuthCookie(req, reply, session.id, session.expiresAt);
     return { ok: true, metrics: snapshotGatewayMetrics() };
 });
+app.get('/api/events/stream', async (req, reply) => {
+    const session = getWebSessionFromRequest(req);
+    if (!session) {
+        reply.code(401);
+        return { ok: false, error: 'unauthorized' };
+    }
+    touchWebSession(session);
+    setAuthCookie(req, reply, session.id, session.expiresAt);
+    reply.hijack();
+    const res = reply.raw;
+    res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-cache, no-transform');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+    res.flushHeaders?.();
+    const clientId = nanoid(10);
+    const heartbeat = setInterval(() => {
+        const client = uiSseClients.get(clientId);
+        if (!client || client.closed)
+            return;
+        try {
+            writeSseEvent(client.res, 'heartbeat', { ts: Date.now(), version: uiUpdateVersion });
+        }
+        catch {
+            closeUiSseClient(clientId);
+        }
+    }, 30_000);
+    heartbeat.unref();
+    uiSseClients.set(clientId, {
+        id: clientId,
+        res,
+        heartbeat,
+        closed: false,
+    });
+    try {
+        writeSseEvent(res, 'connected', { ts: Date.now(), version: uiUpdateVersion });
+    }
+    catch {
+        closeUiSseClient(clientId);
+        return;
+    }
+    const cleanup = () => closeUiSseClient(clientId);
+    req.raw.on('close', cleanup);
+    req.raw.on('aborted', cleanup);
+});
 app.post('/api/enroll/create', async (req, reply) => {
     const webSession = getWebSessionFromRequest(req);
     if (!webSession) {
@@ -1297,7 +1410,7 @@ app.post('/api/runners/enroll', async (req, reply) => {
     metrics.enrollConsumed += 1;
     const id = nanoid(12);
     const runnerToken = nanoid(32);
-    store.patch((s) => {
+    patchStore((s) => {
         s.runners[id] = {
             id,
             name: typeof body.name === 'string' ? body.name : undefined,
@@ -1390,17 +1503,30 @@ app.post('/api/runners/:id/sessions', async (req, reply) => {
         return { ok: false, error: 'runner offline' };
     }
     const body = (req.body || {});
-    const tool = String(body.tool || 'codex').trim().toLowerCase();
-    if (!['codex', 'claude', 'gemini'].includes(tool)) {
+    const supportedTools = getRunnerSupportedTools(runner);
+    if (!supportedTools.length) {
+        reply.code(409);
+        return { ok: false, error: 'runner reports no supported tools' };
+    }
+    const requestedTool = normalizeToolName(body.tool);
+    const tool = requestedTool || supportedTools[0];
+    if (!TOOL_ORDER.includes(tool)) {
         reply.code(400);
         return { ok: false, error: 'tool must be codex|claude|gemini' };
+    }
+    if (!runnerSupportsTool(runner, tool)) {
+        reply.code(400);
+        return {
+            ok: false,
+            error: `tool ${tool} is not supported by runner ${runnerId}; supported=${supportedTools.join('|')}`,
+        };
     }
     const projectPath = typeof body.projectPath === 'string' && body.projectPath.trim() ? body.projectPath.trim() : undefined;
     const projectNameRaw = typeof body.projectName === 'string' && body.projectName.trim() ? body.projectName.trim() : '';
     const projectName = projectNameRaw || `${runner.name || runner.id}-${tool}`;
     const projectId = nanoid(12);
     const sessionId = nanoid(12);
-    store.patch((st) => {
+    patchStore((st) => {
         st.projects[projectId] = {
             id: projectId,
             name: projectName,
@@ -1457,7 +1583,7 @@ app.delete('/api/runners/:id', async (req, reply) => {
         if (project.runnerId === runnerId)
             projectIdsToDelete.push(project.id);
     }
-    store.patch((st) => {
+    patchStore((st) => {
         delete st.runners[runnerId];
         for (const sid of sessionIdsToDelete)
             delete st.sessions[sid];
@@ -1478,7 +1604,7 @@ app.post('/api/projects', async (req) => {
     const body = (req.body || {});
     const name = typeof body.name === 'string' && body.name.trim() ? body.name.trim() : 'Untitled';
     const id = nanoid(12);
-    store.patch((s) => {
+    patchStore((s) => {
         s.projects[id] = {
             id,
             name,
@@ -1506,18 +1632,20 @@ app.get('/ws/runner', { websocket: true }, (conn, req) => {
         ws.close(1008, 'unauthorized');
         return;
     }
-    store.patch((s) => {
+    patchStore((s) => {
         if (s.runners[runnerId])
             s.runners[runnerId].lastSeenAt = Date.now();
     });
     runnerOnline.add(runnerId);
     runnerConns.set(runnerId, ws);
+    scheduleUiUpdate();
     ws.send(JSON.stringify({ type: 'hello', runnerId, ts: Date.now() }));
     sendReconcileRequest(runnerId, ws);
     ws.on('close', (code, reason) => {
         app.log.info({ runnerId, code, reason: reason?.toString() || '' }, 'runner ws closed');
         runnerOnline.delete(runnerId);
         runnerConns.delete(runnerId);
+        scheduleUiUpdate();
     });
     ws.on('error', (err) => {
         app.log.error({ runnerId, err: err?.message || err }, 'runner ws error');
@@ -1553,7 +1681,7 @@ app.get('/ws/runner', { websocket: true }, (conn, req) => {
                 return;
             }
             if (msg?.type === 'capabilities') {
-                store.patch((s) => {
+                patchStore((s) => {
                     if (s.runners[runnerId]) {
                         s.runners[runnerId].capabilities = msg.capabilities;
                         s.runners[runnerId].lastSeenAt = Date.now();
@@ -1713,12 +1841,12 @@ app.post('/api/sessions', async (req, reply) => {
     const body = (req.body || {});
     const projectId = String(body.projectId || '');
     const requestedRunnerId = typeof body.runnerId === 'string' ? body.runnerId.trim() : '';
-    const tool = String(body.tool || '');
+    const tool = normalizeToolName(body.tool);
     if (!projectId || !tool) {
         reply.code(400);
         return { ok: false, error: 'projectId and tool are required' };
     }
-    if (!['codex', 'claude', 'gemini'].includes(tool)) {
+    if (!TOOL_ORDER.includes(tool)) {
         reply.code(400);
         return { ok: false, error: 'tool must be codex|claude|gemini' };
     }
@@ -1737,11 +1865,19 @@ app.post('/api/sessions', async (req, reply) => {
         reply.code(404);
         return { ok: false, error: 'runner not found' };
     }
+    if (!runnerSupportsTool(s.runners[runnerId], tool)) {
+        const supported = getRunnerSupportedTools(s.runners[runnerId]);
+        reply.code(400);
+        return {
+            ok: false,
+            error: `tool ${tool} is not supported by runner ${runnerId}; supported=${supported.join('|') || 'none'}`,
+        };
+    }
     const projectPath = typeof body.projectPath === 'string' && body.projectPath.trim()
         ? body.projectPath.trim()
         : project.path || undefined;
     const id = nanoid(12);
-    store.patch((st) => {
+    patchStore((st) => {
         st.sessions[id] = {
             id,
             createdAt: Date.now(),
@@ -1797,6 +1933,19 @@ app.post('/api/sessions/:id/start', async (req, reply) => {
     if (!requireSessionAccess(session, authSession.user)) {
         reply.code(403);
         return { ok: false, error: 'forbidden' };
+    }
+    const runner = s.runners[session.runnerId];
+    if (!runner) {
+        reply.code(404);
+        return { ok: false, error: 'runner not found' };
+    }
+    if (!runnerSupportsTool(runner, String(session.tool || '').toLowerCase())) {
+        const supported = getRunnerSupportedTools(runner);
+        reply.code(409);
+        return {
+            ok: false,
+            error: `runner ${session.runnerId} does not support tool ${session.tool}; supported=${supported.join('|') || 'none'}`,
+        };
     }
     if (session.status === 'running' || session.status === 'starting' || session.status === 'stopping') {
         reply.code(409);
@@ -1920,7 +2069,7 @@ app.delete('/api/sessions/:id', async (req, reply) => {
     }
     const projectId = session.projectId;
     let removedProjectId = null;
-    store.patch((st) => {
+    patchStore((st) => {
         delete st.sessions[sessionId];
         const projectStillUsed = Object.values(st.sessions).some((x) => x.projectId === projectId);
         if (!projectStillUsed && st.projects[projectId]) {

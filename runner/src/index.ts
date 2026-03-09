@@ -1,5 +1,3 @@
-process.on('uncaughtException', (e) => { console.error('[runner] uncaughtException', e); });
-process.on('unhandledRejection', (e) => { console.error('[runner] unhandledRejection', e); });
 import os from 'node:os';
 import path from 'node:path';
 import { WebSocket } from 'ws';
@@ -30,12 +28,20 @@ const WS_BACKPRESSURE_LIMIT = 256 * 1024;
 const WS_QUEUE_LIMIT_BYTES = 2 * 1024 * 1024;
 const PTY_CHUNK_BYTES = 4096;
 const METRICS_HEARTBEAT_MS = Number(process.env.AGENTMESH_RUNNER_METRICS_HEARTBEAT_MS || 5000);
+const RUNNER_DEBUG = parseEnvBool(process.env.AGENTMESH_RUNNER_DEBUG, false);
 let toolCommands = resolveToolCommands();
 let localCapabilities = detectCapabilities();
 let supportedTools = supportedToolsFrom(localCapabilities.tools);
 
 gatewayHttp = gatewayHttp.trim().replace(/\/+$/, '');
 gatewayWs = gatewayWs.trim().replace(/\/+$/, '');
+
+function parseEnvBool(raw: string | undefined, fallback: boolean): boolean {
+  if (typeof raw !== 'string') return fallback;
+  const v = raw.trim().toLowerCase();
+  if (!v) return fallback;
+  return v === '1' || v === 'true' || v === 'yes' || v === 'on';
+}
 
 function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
@@ -44,6 +50,42 @@ function sleep(ms: number) {
 function normalizeGatewayUrl(url: string): string {
   return url.trim().replace(/\/+$/, '');
 }
+
+function logInfo(message: string, extra?: unknown) {
+  if (extra === undefined) {
+    console.log('[runner]', message);
+    return;
+  }
+  console.log('[runner]', message, extra);
+}
+
+function logWarn(message: string, extra?: unknown) {
+  if (extra === undefined) {
+    console.warn('[runner]', message);
+    return;
+  }
+  console.warn('[runner]', message, extra);
+}
+
+function logError(message: string, extra?: unknown) {
+  if (extra === undefined) {
+    console.error('[runner]', message);
+    return;
+  }
+  console.error('[runner]', message, extra);
+}
+
+function logDebug(message: string, extra?: unknown) {
+  if (!RUNNER_DEBUG) return;
+  if (extra === undefined) {
+    console.log('[runner][debug]', message);
+    return;
+  }
+  console.log('[runner][debug]', message, extra);
+}
+
+process.on('uncaughtException', (e) => { logError('uncaughtException', e); });
+process.on('unhandledRejection', (e) => { logError('unhandledRejection', e); });
 
 type EnrollCodePayload = {
   v?: number;
@@ -143,7 +185,7 @@ function detectCapabilities(): {
   const detected = applySessionBackendConstraints(detectToolCapabilities(toolCommands), { tmuxAvailable });
   const { tools, toolDetails, unsupported } = detected;
   if (unsupported.length) {
-    console.log('[runner] tool unavailable on this host', { unsupported });
+    logWarn('tool unavailable on this host', { unsupported });
   }
 
   return {
@@ -227,7 +269,7 @@ async function connectLoop() {
       const id = await ensureIdentity();
       const wsUrl = `${gatewayWs}/ws/runner?runnerId=${encodeURIComponent(id.runnerId)}`;
 
-      console.log(`[runner] connecting ws gateway=${gatewayWs} runnerId=${id.runnerId}`);
+      logInfo(`connecting ws gateway=${gatewayWs} runnerId=${id.runnerId}`);
       const ws = new WebSocket(wsUrl, {
         headers: {
           Authorization: `Bearer ${id.runnerToken}`,
@@ -241,7 +283,7 @@ async function connectLoop() {
 
       refreshLocalCapabilities();
       attempt = 0;
-      console.log('[runner] ws connected');
+      logInfo('ws connected', { runnerId: id.runnerId });
       let wsClosed = false;
       const outQueue: Buffer[] = [];
       let queuedBytes = 0;
@@ -268,7 +310,7 @@ async function connectLoop() {
           counters.framesSent += 1;
           counters.bytesSent += frame.length;
           ws.send(frame, { binary: true }, (err) => {
-            if (err) console.error('[runner] ws send(binary) failed', err?.message || err);
+            if (err) logError('ws send(binary) failed', err?.message || err);
           });
           sent += 1;
         }
@@ -297,7 +339,7 @@ async function connectLoop() {
           counters.bytesDropped += dropped.length;
         }
         if (queuedBytes > WS_QUEUE_LIMIT_BYTES * 0.8) {
-          console.warn('[runner] pty queue high watermark', { queuedBytes, frames: outQueue.length });
+          logWarn('pty queue high watermark', { queuedBytes, frames: outQueue.length });
         }
         if (!flushTimer) flushTimer = setInterval(flushOutgoing, 12);
         flushOutgoing();
@@ -314,7 +356,7 @@ async function connectLoop() {
         }));
 
       ws.on('error', (e: any) => {
-        console.error('[runner] ws error', e?.message || e);
+        logError('ws error', e?.message || e);
       });
 
       ws.on('close', (code: number, reason: Buffer) => {
@@ -327,7 +369,7 @@ async function connectLoop() {
           clearInterval(metricsTimer);
           metricsTimer = null;
         }
-        console.log(`[runner] ws closed code=${code} reason=${reason?.toString() || ''}`);
+        logWarn(`ws closed code=${code} reason=${reason?.toString() || ''}`);
       });
 
       ws.send(JSON.stringify({ type: 'capabilities', capabilities: localCapabilities, ts: Date.now() }));
@@ -350,7 +392,7 @@ async function connectLoop() {
         if (isBinary) {
           const parsed = decodeBinaryFrame(rawDataToBuffer(data as any));
           if (!parsed) {
-            console.warn('[runner] invalid binary frame');
+            logWarn('invalid binary frame');
             return;
           }
           if (parsed.kind === BIN_MSG_PTY_INPUT) {
@@ -359,7 +401,7 @@ async function connectLoop() {
             if (parsed.payload.length) ps.pty.write(parsed.payload.toString('utf8'));
             return;
           }
-          console.warn('[runner] unknown binary frame kind', parsed.kind);
+          logWarn('unknown binary frame kind', parsed.kind);
           return;
         }
 
@@ -368,12 +410,12 @@ async function connectLoop() {
         try {
           msg = JSON.parse(raw);
         } catch {
-          console.log('[runner] msg(raw)', raw.slice(0, 2000));
+          logDebug('msg(raw)', raw.slice(0, 2000));
           return;
         }
 
         if (msg?.type === 'hello') {
-          console.log(`[runner] hello from gateway runnerId=${msg.runnerId}`);
+          logDebug(`hello from gateway runnerId=${msg.runnerId}`);
           return;
         }
 
@@ -389,7 +431,7 @@ async function connectLoop() {
         }
 
         if (msg?.type === 'start_session') {
-          console.log('[runner] got start_session', msg);
+          logDebug('got start_session', msg);
           try {
             const sessionId = String(msg.sessionId || '');
             const tool = String(msg.tool || '').toLowerCase() as ToolName;
@@ -418,7 +460,7 @@ async function connectLoop() {
             }
 
             const ps = spawnCodexPty(sessionId, projectPath, cols, rows);
-            console.log('[runner] spawned pty', { sessionId, pid: ps.pty.pid });
+            logInfo('spawned pty', { sessionId, pid: ps.pty.pid, tool });
             sessions.set(sessionId, ps);
             sessionTools.set(sessionId, tool);
 
@@ -439,7 +481,7 @@ async function connectLoop() {
 
             ws.send(JSON.stringify({ type: 'start_session_result', ok: true, sessionId, ts: Date.now() }));
           } catch (e: any) {
-            console.error('[runner] start_session error', e);
+            logError('start_session error', e);
             ws.send(
               JSON.stringify({
                 type: 'start_session_result',
@@ -504,16 +546,16 @@ async function connectLoop() {
           return;
         }
 
-        console.log('[runner] msg', msg);
+        logDebug('msg', msg);
       });
 
       await new Promise<void>((resolve) => {
         ws.once('close', () => resolve());
       });
 
-      console.log('[runner] ws closed; will reconnect');
+      logWarn('ws closed; will reconnect');
     } catch (e: any) {
-      console.error('[runner] connect loop error:', e?.message || e);
+      logWarn('connect loop error', e?.message || e);
     }
 
     const backoff = Math.min(15000, 500 + attempt * 500);

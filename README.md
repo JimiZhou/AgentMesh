@@ -4,6 +4,12 @@ Self-hosted agent coding mesh (gateway + runners) for Codex, Claude Code, Gemini
 
 MVP goal: browser -> gateway -> runner -> persistent tmux session.
 
+Recent release-focused work rebuilt the gateway console for production use:
+
+- Split the old single-file UI into `gateway/src/ui.html` + `gateway/src/ui/*` assets.
+- Reworked the web console for clearer runner/session flows and stronger mobile terminal UX.
+- Reduced runner-side log noise and kept diagnostics available via explicit debug mode.
+
 ## Runtime Requirement
 
 - Node.js 22+
@@ -26,6 +32,11 @@ MVP goal: browser -> gateway -> runner -> persistent tmux session.
 4. Start runner with enroll code:
    `AGENTMESH_ENROLL_CODE='<enroll-code>' npm --prefix runner run dev`
 
+Production-style build/run:
+
+- `npm --prefix gateway run build && npm --prefix gateway run start`
+- `npm --prefix runner run build && npm --prefix runner run start`
+
 ## Tool Support
 
 - Runner now auto-detects local CLI availability for `codex`, `claude`, and `gemini`.
@@ -45,6 +56,16 @@ Environment overrides (runner):
   - `AGENTMESH_CODEX_CMD`
   - `AGENTMESH_CLAUDE_CMD`
   - `AGENTMESH_GEMINI_CMD`
+- Optional debug logging:
+  - `AGENTMESH_RUNNER_DEBUG=1`
+
+## UI Structure
+
+- Gateway page shell: `gateway/src/ui.html`
+- Console assets: `gateway/src/ui/styles.css`, `gateway/src/ui/app.js`, `gateway/src/ui/terminal.js`
+- Built static assets are copied into `gateway/dist/assets/ui/` during `npm --prefix gateway run build`
+
+The current console is organized around five flows: login, runner fleet overview, settings, runner detail, and terminal. Session creation now launches directly into terminal flow, and mobile terminal controls expose sticky Ctrl/Alt keys plus navigation shortcuts.
 
 ## Repository Hygiene
 

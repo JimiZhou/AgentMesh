@@ -2,3223 +2,388 @@
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>AgentMesh</title>
+  <meta
+    name="description"
+    content="AgentMesh 控制台，用于连接远端网关、管理本地 runner，并在浏览器中安全使用 Codex、Claude 和 Gemini CLI。"
+  />
   <link rel="icon" href="data:," />
   <link rel="stylesheet" href="/assets/xterm/xterm.css" />
-  <style>
-    :root {
-      --font-sans: "Geist Sans", "Inter", "Avenir Next", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
-      --font-mono: "Geist Mono", "JetBrains Mono", "SFMono-Regular", Menlo, Monaco, Consolas, "Liberation Mono", monospace;
-      --app-height: 100dvh;
-      --bg: #f5f6f8;
-      --bg-deep: #eceff3;
-      --panel: #ffffff;
-      --panel-strong: #ffffff;
-      --line: #d9dde4;
-      --line-strong: #bfc7d2;
-      --text: #101828;
-      --muted: #667085;
-      --ok: #15803d;
-      --warn: #b45309;
-      --danger: #b91c1c;
-      --accent: #111827;
-      --shadow-lg: 0 22px 46px rgba(16, 24, 40, 0.12);
-      --shadow-md: 0 12px 28px rgba(16, 24, 40, 0.10);
-      --shadow-sm: 0 6px 16px rgba(16, 24, 40, 0.08);
-      --radius: 10px;
-      --control-bg: #ffffff;
-      --control-bg-focus: #ffffff;
-      --control-border: #d3d9e3;
-      --focus-ring: rgba(17, 24, 39, 0.16);
-      --button-primary-bg: #111827;
-      --button-primary-text: #f8fafc;
-      --button-primary-border: #111827;
-      --button-secondary-bg: #ffffff;
-      --button-secondary-text: #0f172a;
-      --button-secondary-border: #cfd6e0;
-      --code-bg: #0f172a;
-      --code-text: #dbeafe;
-      --term-bg: #0a0b0f;
-      --term-fg: #e5e7eb;
-      --surface-soft: rgba(17, 24, 39, 0.04);
-      --surface-mid: rgba(17, 24, 39, 0.08);
-      --term-page-bg: #f5f6f8;
-      --term-panel-bg: #ffffff;
-      --term-panel-border: #d9dde4;
-      --term-host-bg: #ffffff;
-      --term-host-border: #d3d9e3;
-      --term-key-group-bg: rgba(17, 24, 39, 0.04);
-      --term-key-group-border: #d3d9e3;
-    }
-
-    html[data-theme="dark"] {
-      --bg: #0b0d11;
-      --bg-deep: #12151b;
-      --panel: #171a21;
-      --panel-strong: #1b1f27;
-      --line: #2a313d;
-      --line-strong: #3b4454;
-      --text: #f3f4f6;
-      --muted: #98a2b3;
-      --ok: #22c55e;
-      --warn: #f59e0b;
-      --danger: #f87171;
-      --accent: #f9fafb;
-      --shadow-lg: 0 22px 46px rgba(0, 0, 0, 0.48);
-      --shadow-md: 0 12px 28px rgba(0, 0, 0, 0.42);
-      --shadow-sm: 0 6px 16px rgba(0, 0, 0, 0.30);
-      --control-bg: #11141a;
-      --control-bg-focus: #151923;
-      --control-border: #323a46;
-      --focus-ring: rgba(243, 244, 246, 0.20);
-      --button-primary-bg: #f3f4f6;
-      --button-primary-text: #111827;
-      --button-primary-border: #f3f4f6;
-      --button-secondary-bg: #202530;
-      --button-secondary-text: #f3f4f6;
-      --button-secondary-border: #363f4f;
-      --code-bg: #0b0f16;
-      --code-text: #cdd6e5;
-      --term-bg: #040506;
-      --term-fg: #f3f4f6;
-      --surface-soft: rgba(255, 255, 255, 0.04);
-      --surface-mid: rgba(255, 255, 255, 0.08);
-      --term-page-bg: #0b0d11;
-      --term-panel-bg: #171a21;
-      --term-panel-border: #2a313d;
-      --term-host-bg: #040506;
-      --term-host-border: #323a46;
-      --term-key-group-bg: rgba(255, 255, 255, 0.06);
-      --term-key-group-border: #363f4f;
-    }
-
-    * {
-      box-sizing: border-box;
-    }
-
-    html,
-    body {
-      margin: 0;
-      height: 100%;
-      min-height: 100%;
-      color: var(--text);
-      font-family: var(--font-sans);
-      font-size: 14px;
-      background: var(--bg);
-      -webkit-font-smoothing: antialiased;
-      -moz-osx-font-smoothing: grayscale;
-    }
-
-    body {
-      position: relative;
-      overflow-x: hidden;
-      letter-spacing: 0;
-    }
-
-    body.terminal-active {
-      background: var(--term-page-bg);
-      color: var(--text);
-    }
-
-    body::before {
-      display: none;
-    }
-
-    body.terminal-active::before {
-      display: none;
-    }
-
-    .atmosphere {
-      display: none;
-    }
-
-    body.terminal-active .atmosphere {
-      display: none;
-    }
-
-    .orb {
-      display: none;
-    }
-
-    .orb-cyan {
-      display: none;
-    }
-
-    .orb-blue {
-      display: none;
-    }
-
-    .orb-amber {
-      display: none;
-    }
-
-    .hidden {
-      display: none !important;
-    }
-
-    .app {
-      position: relative;
-      z-index: 1;
-      min-height: var(--app-height);
-      padding:
-        calc(28px + env(safe-area-inset-top, 0px))
-        clamp(14px, 3vw, 30px)
-        calc(28px + env(safe-area-inset-bottom, 0px));
-    }
-
-    .app.terminal-mode {
-      min-height: var(--app-height);
-      padding:
-        calc(10px + env(safe-area-inset-top, 0px))
-        max(8px, env(safe-area-inset-right, 0px))
-        calc(10px + env(safe-area-inset-bottom, 0px))
-        max(8px, env(safe-area-inset-left, 0px));
-    }
-
-    .theme-toggle {
-      position: fixed;
-      top: calc(12px + env(safe-area-inset-top, 0px));
-      right: max(12px, env(safe-area-inset-right, 0px));
-      z-index: 20;
-      min-height: 32px;
-      padding: 6px 10px;
-      border-radius: 8px;
-      font-size: 12px;
-      letter-spacing: 0.01em;
-      box-shadow: none;
-    }
-
-    .view {
-      animation: viewIn 180ms ease both;
-    }
-
-    .panel {
-      position: relative;
-      border: 1px solid var(--line);
-      border-radius: var(--radius);
-      background: var(--panel-strong);
-      box-shadow: none;
-      overflow: hidden;
-    }
-
-    .panel::after {
-      display: none;
-    }
-
-    .row {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      flex-wrap: wrap;
-    }
-
-    .muted {
-      color: var(--muted);
-    }
-
-    .pill {
-      border: 1px solid var(--line);
-      border-radius: 999px;
-      padding: 6px 11px;
-      font-size: 12px;
-      color: var(--muted);
-      background: var(--panel);
-    }
-
-    .pill.ok {
-      color: var(--ok);
-      border-color: rgba(5, 150, 105, 0.34);
-      background: rgba(5, 150, 105, 0.13);
-    }
-
-    .pill.warn {
-      color: var(--warn);
-      border-color: rgba(217, 119, 6, 0.34);
-      background: rgba(217, 119, 6, 0.13);
-    }
-
-    h1,
-    h2,
-    h3,
-    p {
-      margin: 0;
-      position: relative;
-      z-index: 1;
-    }
-
-    h1,
-    h2 {
-      letter-spacing: -0.018em;
-      line-height: 1.18;
-      font-weight: 620;
-    }
-
-    h1 {
-      font-size: clamp(30px, 5vw, 42px);
-      line-height: 1.08;
-    }
-
-    h2 {
-      font-size: clamp(20px, 2.8vw, 28px);
-    }
-
-    h3 {
-      letter-spacing: -0.01em;
-      font-size: 16px;
-      line-height: 1.32;
-      font-weight: 620;
-    }
-
-    p {
-      line-height: 1.58;
-    }
-
-    button,
-    input,
-    textarea,
-    select {
-      font: inherit;
-    }
-
-    input,
-    textarea,
-    select {
-      width: 100%;
-      min-height: 38px;
-      background: var(--control-bg);
-      border: 1px solid var(--control-border);
-      color: var(--text);
-      border-radius: 9px;
-      outline: none;
-      padding: 8px 12px;
-      transition: border-color 160ms ease, box-shadow 160ms ease, background 160ms ease;
-      font-size: 13px;
-    }
-
-    input::placeholder,
-    textarea::placeholder {
-      color: var(--muted);
-    }
-
-    input:focus,
-    textarea:focus,
-    select:focus {
-      border-color: var(--accent);
-      background: var(--control-bg-focus);
-      box-shadow: 0 0 0 4px var(--focus-ring);
-    }
-
-    button {
-      position: relative;
-      border: 1px solid var(--button-primary-border);
-      border-radius: 9px;
-      padding: 8px 14px;
-      min-height: 36px;
-      background: var(--button-primary-bg);
-      color: var(--button-primary-text);
-      font-weight: 600;
-      font-size: 13px;
-      cursor: pointer;
-      box-shadow: none;
-      transition: background 160ms ease, border-color 160ms ease, color 160ms ease, opacity 160ms ease;
-    }
-
-    button:hover {
-      transform: none;
-      box-shadow: none;
-    }
-
-    button.secondary {
-      background: var(--button-secondary-bg);
-      border-color: var(--button-secondary-border);
-      color: var(--button-secondary-text);
-      font-weight: 620;
-      box-shadow: none;
-    }
-
-    button.secondary:hover {
-      border-color: var(--line-strong);
-      box-shadow: none;
-    }
-
-    button.danger {
-      background: #b91c1c;
-      border-color: #b91c1c;
-      color: #fff;
-    }
-
-    button:disabled {
-      opacity: 0.54;
-      cursor: not-allowed;
-      transform: none;
-      box-shadow: none;
-    }
-
-    .field {
-      display: grid;
-      gap: 8px;
-      position: relative;
-      z-index: 1;
-    }
-
-    .field label {
-      color: var(--muted);
-      font-size: 12px;
-      font-weight: 560;
-      letter-spacing: 0.01em;
-    }
-
-    .error {
-      margin-top: 10px;
-      min-height: 18px;
-      color: var(--danger);
-      font-size: 13px;
-      position: relative;
-      z-index: 1;
-    }
-
-    .login-wrap {
-      min-height: calc(var(--app-height) - 48px);
-      display: grid;
-      place-items: center;
-    }
-
-    .login-card {
-      width: min(500px, 96vw);
-      padding: clamp(20px, 2.6vw, 30px);
-      display: grid;
-      gap: 10px;
-      box-shadow: none;
-    }
-
-    .login-card::before {
-      display: none;
-    }
-
-    .eyebrow {
-      position: relative;
-      z-index: 1;
-      display: inline-flex;
-      width: fit-content;
-      font-size: 11px;
-      font-weight: 600;
-      letter-spacing: 0.07em;
-      text-transform: uppercase;
-      color: var(--muted);
-      background: var(--surface-soft);
-      border: 1px solid var(--line);
-      border-radius: 999px;
-      padding: 5px 10px;
-    }
-
-    .login-title {
-      font-size: clamp(34px, 4.2vw, 44px);
-      line-height: 1;
-      margin-top: 2px;
-    }
-
-    .login-sub {
-      font-size: 13px;
-      max-width: 44ch;
-      line-height: 1.55;
-    }
-
-    .logo {
-      width: 52px;
-      height: 52px;
-      border-radius: 12px;
-      background: var(--surface-soft);
-      border: 1px solid var(--line);
-      box-shadow: none;
-      display: grid;
-      place-items: center;
-      margin-bottom: 4px;
-      position: relative;
-      z-index: 1;
-    }
-
-    .logo svg {
-      width: 24px;
-      height: 24px;
-      color: var(--text);
-      opacity: 0.9;
-    }
-
-    .view-wrap {
-      max-width: 1120px;
-      width: min(1120px, 100%);
-      margin: 0 auto;
-      display: grid;
-      gap: 12px;
-    }
-
-    .header-card {
-      padding: 14px;
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) auto;
-      align-items: start;
-      gap: 12px;
-    }
-
-    .header-card > div:first-child {
-      min-width: 0;
-    }
-
-    .header-card .row {
-      justify-content: flex-end;
-      align-items: center;
-    }
-
-    #workspaceView .header-card .row.workspace-actions {
-      gap: 8px;
-    }
-
-    .runner-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(294px, 1fr));
-      gap: 14px;
-      align-items: stretch;
-    }
-
-    .runner-card {
-      position: relative;
-      padding: 12px;
-      display: grid;
-      gap: 10px;
-      cursor: pointer;
-      border: 1px solid var(--line);
-      border-radius: 12px;
-      background: var(--panel);
-      box-shadow: none;
-      transition: border-color 160ms ease, background 160ms ease;
-      text-align: left;
-      color: var(--text);
-      animation: none;
-    }
-
-    .runner-card::after {
-      content: "";
-      position: absolute;
-      inset: 0;
-      border-radius: inherit;
-      pointer-events: none;
-      border: 1px solid transparent;
-      transition: border-color 180ms ease;
-    }
-
-    .runner-card:hover {
-      border-color: var(--line-strong);
-      transform: none;
-      box-shadow: none;
-    }
-
-    .runner-card:hover::after {
-      border-color: var(--line-strong);
-    }
-
-    .dot {
-      width: 10px;
-      height: 10px;
-      border-radius: 999px;
-      flex: 0 0 auto;
-      display: inline-block;
-      margin-top: 1px;
-    }
-
-    .dot.on {
-      background: var(--ok);
-      box-shadow: 0 0 0 5px rgba(5, 150, 105, 0.20);
-    }
-
-    .dot.off {
-      background: rgba(8, 33, 53, 0.28);
-      box-shadow: 0 0 0 5px rgba(8, 33, 53, 0.07);
-    }
-
-    .runner-id {
-      display: none;
-      font-family: var(--font-mono);
-      font-size: 12px;
-      color: var(--muted);
-      word-break: break-all;
-    }
-
-    .tools {
-      display: flex;
-      gap: 6px;
-      flex-wrap: wrap;
-    }
-
-    .tool-badge {
-      font-size: 11px;
-      border-radius: 999px;
-      padding: 4px 9px;
-      border: 1px solid var(--line);
-      background: var(--surface-soft);
-      color: var(--text);
-      font-weight: 600;
-      letter-spacing: 0.02em;
-    }
-
-    .empty {
-      border: 1px dashed var(--line);
-      border-radius: 10px;
-      padding: 12px;
-      color: var(--muted);
-      background: var(--surface-soft);
-      font-size: 13px;
-    }
-
-    .detail-grid {
-      display: grid;
-      grid-template-columns: minmax(280px, 370px) 1fr;
-      gap: 14px;
-      align-items: start;
-    }
-
-    .detail-card {
-      padding: 12px;
-      display: grid;
-      gap: 10px;
-    }
-
-    .cap-box {
-      margin: 0;
-      border: 1px solid var(--line);
-      border-radius: 10px;
-      background: var(--code-bg);
-      padding: 10px;
-      max-height: 300px;
-      overflow: auto;
-      font-size: 12px;
-      line-height: 1.45;
-      color: var(--code-text);
-      font-family: var(--font-mono);
-    }
-
-    .session-list {
-      display: grid;
-      gap: 9px;
-    }
-
-    .session-item {
-      border: 1px solid var(--line);
-      border-radius: 10px;
-      background: var(--surface-soft);
-      padding: 10px;
-      display: grid;
-      gap: 7px;
-      animation: none;
-    }
-
-    .session-head {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .session-id {
-      font-family: var(--font-mono);
-      font-size: 12px;
-      color: var(--text);
-      word-break: break-all;
-    }
-
-    .session-meta {
-      display: flex;
-      justify-content: space-between;
-      gap: 8px;
-      flex-wrap: wrap;
-      font-size: 11px;
-      color: var(--muted);
-    }
-
-    .status-badge {
-      font-size: 10px;
-      border-radius: 999px;
-      border: 1px solid transparent;
-      padding: 3px 7px;
-      text-transform: lowercase;
-      font-weight: 700;
-    }
-
-    .status-running,
-    .status-starting {
-      color: #047857;
-      border-color: rgba(5, 150, 105, 0.30);
-      background: rgba(5, 150, 105, 0.13);
-    }
-
-    .status-created,
-    .status-stopping {
-      color: #b45309;
-      border-color: rgba(217, 119, 6, 0.30);
-      background: rgba(217, 119, 6, 0.13);
-    }
-
-    .status-exited,
-    .status-ended,
-    .status-error {
-      color: #b91c1c;
-      border-color: rgba(220, 38, 38, 0.30);
-      background: rgba(220, 38, 38, 0.13);
-    }
-
-    .session-actions {
-      display: flex;
-      gap: 8px;
-      flex-wrap: wrap;
-    }
-
-    .session-actions button {
-      min-width: 90px;
-    }
-
-    .terminal-layout {
-      height: calc(var(--app-height) - 20px);
-      max-width: 1500px;
-      margin: 0 auto;
-      display: grid;
-      gap: 12px;
-      grid-template-rows: auto minmax(0, 1fr);
-      min-height: 0;
-    }
-
-    body.terminal-active .panel {
-      border-color: var(--term-panel-border);
-      background: var(--term-panel-bg);
-      box-shadow: none;
-    }
-
-    body.terminal-active .panel::after {
-      opacity: 0;
-    }
-
-    .terminal-head {
-      padding: 10px 12px;
-      display: grid;
-      grid-template-columns: auto minmax(0, 1fr);
-      align-items: center;
-      gap: 10px 14px;
-    }
-
-    #termTitle {
-      font-size: 14px !important;
-      line-height: 1.2;
-    }
-
-    #termMeta {
-      font-size: 11px !important;
-      word-break: break-all;
-    }
-
-    .terminal-meta {
-      min-width: 0;
-      display: grid;
-      gap: 6px;
-    }
-
-    .terminal-status {
-      display: flex;
-      align-items: center;
-      justify-content: flex-end;
-      gap: 8px;
-      flex-wrap: wrap;
-    }
-
-    .term-conn.connected {
-      color: #22c55e;
-      border-color: rgba(34, 197, 94, 0.34);
-      background: rgba(34, 197, 94, 0.10);
-    }
-
-    .term-conn.connecting {
-      color: #f59e0b;
-      border-color: rgba(245, 158, 11, 0.34);
-      background: rgba(245, 158, 11, 0.12);
-    }
-
-    .term-conn.disconnected,
-    .term-conn.error {
-      color: #f87171;
-      border-color: rgba(248, 113, 113, 0.34);
-      background: rgba(248, 113, 113, 0.11);
-    }
-
-    .term-cursor {
-      font-family: var(--font-mono);
-      font-size: 12px;
-    }
-
-    .terminal-card {
-      min-height: 0;
-      padding: 10px;
-      display: grid;
-      gap: 8px;
-      grid-template-rows: minmax(0, 1fr) auto auto;
-    }
-
-    .term-host {
-      border: 1px solid var(--term-host-border);
-      border-radius: 10px;
-      overflow: hidden;
-      background: var(--term-host-bg);
-      min-height: 0;
-      height: 100%;
-      box-shadow: none;
-      overscroll-behavior: contain;
-    }
-
-    .term-host .xterm .xterm-cursor-layer .xterm-cursor {
-      box-shadow: 0 0 0 1px currentColor;
-    }
-
-    .term-hint {
-      color: var(--muted);
-      font-size: 12px;
-    }
-
-    .term-mobile-keys {
-      display: none;
-      gap: 8px;
-      overflow-x: auto;
-      overflow-y: hidden;
-      padding: 2px 0 2px;
-      scrollbar-width: none;
-      -ms-overflow-style: none;
-      -webkit-overflow-scrolling: touch;
-      touch-action: pan-x;
-      scroll-snap-type: x proximity;
-    }
-
-    .term-mobile-keys::-webkit-scrollbar {
-      display: none;
-    }
-
-    .term-mobile-group {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 4px;
-      border-radius: 9px;
-      border: 1px solid var(--term-key-group-border);
-      background: var(--term-key-group-bg);
-      flex: 0 0 auto;
-      scroll-snap-align: start;
-    }
-
-    .term-mobile-keys button {
-      white-space: nowrap;
-      min-height: 34px;
-      min-width: 50px;
-      padding: 6px 10px;
-      border-radius: 8px;
-      font-size: 11px;
-      box-shadow: none;
-      transition: transform 120ms ease, border-color 120ms ease, background 120ms ease, color 120ms ease;
-      flex: 0 0 auto;
-    }
-
-    .term-mobile-keys button:active,
-    .term-mobile-keys button.pressed {
-      transform: translateY(0) scale(0.97);
-      border-color: var(--line-strong);
-      background: var(--surface-mid);
-      color: var(--text);
-    }
-
-    .term-mobile-keys button.mod-active {
-      border-color: var(--line-strong);
-      background: var(--surface-mid);
-      color: var(--text);
-    }
-
-    body.keyboard-open .term-hint {
-      display: none;
-    }
-
-    body.keyboard-open .terminal-layout {
-      height: calc(var(--app-height) - 6px);
-      gap: 6px;
-    }
-
-    body.keyboard-open .terminal-head {
-      padding: 8px 9px;
-      gap: 7px 10px;
-    }
-
-    body.keyboard-open #termMeta {
-      display: none;
-    }
-
-    body.keyboard-open .terminal-card {
-      padding: 6px;
-      gap: 6px;
-    }
-
-    body.keyboard-open .term-mobile-keys {
-      display: flex;
-      gap: 6px;
-      padding-top: 1px;
-    }
-
-    body.keyboard-open .term-mobile-group {
-      padding: 3px;
-      background: var(--term-key-group-bg);
-    }
-
-    .basic-wrap {
-      height: 100%;
-      display: grid;
-      grid-template-rows: 1fr auto;
-      min-height: 0;
-    }
-
-    .basic-out {
-      margin: 0;
-      padding: 10px;
-      overflow: auto;
-      white-space: pre-wrap;
-      word-break: break-word;
-      color: var(--text);
-      font-family: var(--font-mono);
-      font-size: 12px;
-      line-height: 1.45;
-      border-bottom: 1px solid var(--line);
-      background: var(--term-host-bg);
-    }
-
-    .basic-in {
-      border: 0;
-      border-radius: 0;
-      background: var(--control-bg);
-      color: var(--text);
-      resize: vertical;
-      min-height: 70px;
-      max-height: 180px;
-      font-family: var(--font-mono);
-    }
-
-    #riskBanner {
-      border-radius: 10px;
-      box-shadow: none;
-    }
-
-    #modalMask {
-      background: rgba(16, 24, 40, 0.32) !important;
-      backdrop-filter: none;
-    }
-
-    #modalMask > div {
-      background: var(--panel-strong) !important;
-      border-color: var(--line) !important;
-      border-radius: 10px !important;
-      box-shadow: none !important;
-      width: min(520px, 96vw) !important;
-      max-height: calc(var(--app-height) - 28px);
-      overflow: auto;
-    }
-
-    @keyframes viewIn {
-      from {
-        opacity: 0;
-      }
-      to {
-        opacity: 1;
-      }
-    }
-
-    @media (max-width: 980px) {
-      .view-wrap {
-        gap: 10px;
-      }
-
-      .header-card {
-        grid-template-columns: 1fr;
-      }
-
-      .header-card .row {
-        width: 100%;
-        justify-content: flex-start;
-      }
-
-      .detail-grid {
-        grid-template-columns: 1fr;
-      }
-    }
-
-    @media (max-width: 780px) {
-      .atmosphere {
-        display: none;
-      }
-
-      .theme-toggle {
-        top: calc(8px + env(safe-area-inset-top, 0px));
-        right: max(8px, env(safe-area-inset-right, 0px));
-        min-height: 30px;
-        padding: 5px 9px;
-        font-size: 11px;
-      }
-
-      .app {
-        padding:
-          calc(50px + env(safe-area-inset-top, 0px))
-          10px
-          calc(10px + env(safe-area-inset-bottom, 0px));
-      }
-
-      .app.terminal-mode {
-        padding:
-          calc(42px + env(safe-area-inset-top, 0px))
-          max(6px, env(safe-area-inset-right, 0px))
-          calc(6px + env(safe-area-inset-bottom, 0px))
-          max(6px, env(safe-area-inset-left, 0px));
-      }
-
-      .login-wrap {
-        min-height: calc(var(--app-height) - 16px);
-      }
-
-      .login-card {
-        width: min(620px, 100%);
-        padding: 16px;
-      }
-
-      .header-card {
-        padding: 12px;
-      }
-
-      .header-card .row {
-        width: 100%;
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 8px;
-      }
-
-      .header-card .row .pill {
-        width: 100%;
-        min-height: 36px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-      }
-
-      .header-card .row button {
-        width: 100%;
-      }
-
-      .header-card .row button:only-child {
-        grid-column: 1 / -1;
-      }
-
-      #workspaceView .header-card .row.workspace-actions {
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-      }
-
-      #workspaceView .header-card .row.workspace-actions .pill {
-        grid-column: 1 / -1;
-        justify-content: flex-start;
-        padding-left: 12px;
-      }
-
-      #workspaceView .header-card .row.workspace-actions button {
-        min-height: 34px;
-        padding: 6px 8px;
-      }
-
-      .runner-grid {
-        grid-template-columns: 1fr;
-      }
-
-      .detail-card {
-        padding: 10px;
-      }
-
-      .detail-card .row {
-        width: 100%;
-      }
-
-      .detail-card .row button {
-        flex: 1 1 calc(50% - 5px);
-      }
-
-      .session-actions {
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 8px;
-      }
-
-      .terminal-layout {
-        height: calc(var(--app-height) - 8px);
-        gap: 8px;
-      }
-
-      .terminal-head {
-        grid-template-columns: 1fr;
-        padding: 9px 10px;
-        gap: 8px;
-      }
-
-      .terminal-head .row {
-        width: 100%;
-        display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 7px;
-      }
-
-      .terminal-head .row button {
-        flex: none;
-        min-height: 34px;
-        padding: 6px 9px;
-        font-size: 12px;
-      }
-
-      .terminal-meta {
-        gap: 5px;
-      }
-
-      .terminal-status {
-        justify-content: flex-start;
-      }
-
-      .terminal-card {
-        padding: 8px;
-        gap: 8px;
-      }
-
-      .term-host {
-        min-height: 0;
-        border-radius: 10px;
-      }
-
-      .term-hint {
-        font-size: 11px;
-      }
-
-      .term-mobile-keys {
-        display: flex;
-      }
-
-      .term-mobile-group {
-        border-radius: 8px;
-      }
-
-      .session-actions button {
-        width: 100%;
-        min-width: 0;
-      }
-
-      #modalMask {
-        align-items: flex-end;
-        padding: 10px !important;
-      }
-
-      #modalMask > div {
-        width: 100% !important;
-        max-height: calc(var(--app-height) - 16px);
-        padding: 12px !important;
-      }
-    }
-
-    @media (max-width: 520px) {
-      .app {
-        padding-left: 8px;
-        padding-right: 8px;
-      }
-
-      .app.terminal-mode {
-        padding-left: max(4px, env(safe-area-inset-left, 0px));
-        padding-right: max(4px, env(safe-area-inset-right, 0px));
-      }
-
-      .header-card .row {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-      }
-
-      #workspaceView .header-card .row.workspace-actions {
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 7px;
-      }
-
-      #workspaceView .header-card .row.workspace-actions .pill {
-        grid-column: 1 / -1;
-      }
-
-      #workspaceView .header-card .row.workspace-actions button {
-        min-height: 32px;
-        padding: 5px 7px;
-        font-size: 12px;
-      }
-
-      .terminal-head .row {
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 6px;
-      }
-
-      .term-mobile-keys button {
-        min-width: 46px;
-        padding: 5px 7px;
-      }
-
-      .session-meta {
-        display: grid;
-        gap: 5px;
-      }
-
-      .session-head {
-        flex-direction: column;
-        align-items: flex-start;
-      }
-
-      .detail-card .row button {
-        flex: 1 1 100%;
-      }
-
-      .session-actions {
-        grid-template-columns: 1fr;
-      }
-
-      .login-sub {
-        font-size: 12px;
-      }
-    }
-
-    @media (hover: none) {
-      .runner-card:hover {
-        transform: none;
-      }
-    }
-
-    @media (prefers-reduced-motion: reduce) {
-      *,
-      *::before,
-      *::after {
-        animation-duration: 0.01ms !important;
-        animation-iteration-count: 1 !important;
-        transition-duration: 0.01ms !important;
-      }
-    }
-  </style>
+  <link rel="stylesheet" href="/assets/ui/styles.css" />
 </head>
 <body>
-  <div class="atmosphere" aria-hidden="true">
-    <span class="orb orb-cyan"></span>
-    <span class="orb orb-blue"></span>
-    <span class="orb orb-amber"></span>
+  <div class="ambient" aria-hidden="true">
+    <span class="ambient-grid"></span>
+    <span class="ambient-orb ambient-orb-a"></span>
+    <span class="ambient-orb ambient-orb-b"></span>
+    <span class="ambient-orb ambient-orb-c"></span>
   </div>
-  <button id="btnThemeToggle" class="theme-toggle secondary" type="button" aria-label="切换到夜间模式">切换夜间</button>
-  <div id="appRoot" class="app">
-    <section id="loginView" class="view">
-      <div class="login-wrap">
-        <div class="login-card panel">
-          <div class="logo" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-              <path d="M12 2.5c2.1 0 3.8 1.7 3.8 3.8 0 1.3-.7 2.5-1.7 3.2 1.7.6 2.9 2.2 2.9 4.1 0 2.4-1.9 4.3-4.3 4.3H9.3C6.9 21.9 5 20 5 17.6c0-1.9 1.2-3.5 2.9-4.1-1-.7-1.7-1.9-1.7-3.2C6.2 4.2 7.9 2.5 10 2.5h2z" stroke="currentColor" stroke-width="1.6" opacity="0.9"/>
-              <path d="M8.4 10.1h7.2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
-              <path d="M8.4 14h7.2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
-            </svg>
-          </div>
-          <div class="eyebrow">Cloud Agent Control</div>
-          <h1 class="login-title">AgentMesh</h1>
-          <p class="muted login-sub">登录后展示在线/离线 runner，点进后管理会话并进入终端。</p>
 
-          <form id="loginForm">
-            <div class="field" style="margin-top:16px">
-              <label for="authUser">用户名</label>
-              <input id="authUser" autocomplete="username" value="admin" />
-            </div>
-            <div class="field" style="margin-top:12px">
-              <label for="authPassword">密码</label>
-              <input id="authPassword" type="password" autocomplete="current-password" placeholder="输入网关密码" />
-            </div>
-            <div class="field hidden" id="authTotpField" style="margin-top:12px">
-              <label for="authTotp">动态码</label>
-              <input id="authTotp" inputmode="numeric" autocomplete="one-time-code" placeholder="输入 6 位动态码" />
-            </div>
-            <div style="margin-top:14px">
-              <button id="btnLogin" type="submit" style="width:100%">登录</button>
-            </div>
-          </form>
+  <div id="toastStack" class="toast-stack" aria-live="polite" aria-atomic="false"></div>
 
-          <div id="loginError" class="error"></div>
+  <div id="appRoot" class="app-shell">
+    <header class="chrome">
+      <div class="brand-lockup">
+        <div class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="4" y="5" width="24" height="22" rx="7" stroke="currentColor" stroke-width="1.75" />
+            <path d="M10 13.5h12M10 18.5h8" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" />
+          </svg>
+        </div>
+        <div>
+          <div class="brand-name">AgentMesh</div>
+          <div class="brand-sub">Remote runner control for Codex, Claude, and Gemini CLI</div>
         </div>
       </div>
-    </section>
-
-    <section id="workspaceView" class="view hidden">
-      <div class="view-wrap">
-        <header class="header-card panel">
-          <div>
-            <h2 style="letter-spacing:-0.4px">AgentMesh 控制台</h2>
-            <div class="muted" id="runnerSummaryText">-</div>
-          </div>
-          <div class="row workspace-actions">
-            <span class="pill" id="authBadge">未登录</span>
-            <button class="secondary" id="btnOpenSettings">设置</button>
-            <button class="secondary" id="btnRefreshRunners">刷新</button>
-            <button class="secondary" id="btnLogout">退出</button>
-          </div>
-        </header>
-
-        <div id="riskBanner" class="panel hidden" style="padding:12px 14px;border-color:rgba(180,83,9,0.30);background:rgba(180,83,9,0.10);color:var(--warn)">
-          未配置两步验证，存在风险。
-        </div>
-
-        <div id="cleanupResult" class="muted" style="font-size:13px"></div>
-        <section class="panel" style="padding:12px 14px">
-          <div class="field">
-            <label for="runnerSearch">筛选 Runner</label>
-            <input id="runnerSearch" placeholder="按名称、runnerId、能力搜索" />
-          </div>
-        </section>
-        <main id="runnerList" class="runner-grid"></main>
+      <div class="chrome-actions">
+        <span id="authBadge" class="chip">未登录</span>
+        <button id="btnThemeToggle" class="button ghost" type="button" aria-label="切换主题">切换主题</button>
       </div>
-    </section>
+    </header>
 
-    <section id="settingsView" class="view hidden">
-      <div class="view-wrap">
-        <header class="header-card panel">
-          <div>
-            <h2 style="letter-spacing:-0.4px">控制台设置</h2>
-            <div class="muted" id="settingsSub">-</div>
-          </div>
-          <div class="row">
-            <button class="secondary" id="btnBackFromSettings">返回</button>
-          </div>
-        </header>
-
-        <section class="detail-card panel">
-          <h3>账号与密码</h3>
-          <div class="field">
-            <label for="setNewUser">新用户名 (可选)</label>
-            <input id="setNewUser" placeholder="留空表示不修改" />
-          </div>
-          <div class="field">
-            <label for="setNewPassword">新密码 (可选)</label>
-            <input id="setNewPassword" type="password" placeholder="留空表示不修改" />
-          </div>
-          <div class="field">
-            <label for="setOldPassword">当前密码 (必填)</label>
-            <input id="setOldPassword" type="password" placeholder="用于确认身份" />
-          </div>
-          <button id="btnSaveAuth">保存并重新登录</button>
-          <div id="saveAuthResult" class="muted" style="font-size:12px"></div>
-        </section>
-
-        <section class="detail-card panel">
-          <h3>两步验证 (TOTP)</h3>
-          <div class="muted" id="totpStatus" style="font-size:13px">-</div>
-          <div class="row" style="margin-top:8px">
-            <button class="secondary" id="btnTotpEnable">去绑定</button>
-            <button class="danger hidden" id="btnTotpDisable">删除两步验证</button>
-          </div>
-          <div id="totpActionResult" class="muted" style="font-size:12px"></div>
-        </section>
-      </div>
-    </section>
-
-    <section id="runnerDetailView" class="view hidden">
-      <div class="view-wrap">
-        <header class="header-card panel">
-          <div>
-            <h2 id="detailRunnerTitle">Runner</h2>
-            <div class="muted" id="detailRunnerSub">-</div>
-          </div>
-          <div class="row">
-            <button class="secondary" id="btnBackToRunners">返回在线列表</button>
-            <button class="secondary" id="btnRefreshDetail">刷新详情</button>
-          </div>
-        </header>
-
-        <div class="detail-grid">
-          <section class="detail-card panel">
-            <h3>Runner 能力</h3>
-            <div id="detailTools" class="tools"></div>
-            <div id="detailToolHint" class="muted hidden" style="font-size:12px;margin-top:6px"></div>
-            <pre id="detailCapabilities" class="cap-box hidden"></pre>
-
-            <h3>新建会话</h3>
-            <div class="field">
-              <label for="newSessionTool">CLI Agent</label>
-              <select id="newSessionTool">
-                <option value="codex">codex</option>
-                <option value="claude">claude</option>
-                <option value="gemini">gemini</option>
-              </select>
+    <main class="stage">
+      <section id="loginView" class="view">
+        <div class="login-layout">
+          <section class="hero-card panel">
+            <span class="eyebrow">Release Console</span>
+            <h1>把本地机器变成可靠的远端执行节点。</h1>
+            <p class="lede">
+              管理在线 runner、启动 agent session、进入终端，并为上线环境提供更清晰的状态反馈和更稳的移动端体验。
+            </p>
+            <div class="hero-points">
+              <article class="hero-point">
+                <strong>Runner inventory</strong>
+                <span>统一查看在线状态、支持工具、最后心跳和会话负载。</span>
+              </article>
+              <article class="hero-point">
+                <strong>Session launch</strong>
+                <span>直接创建 Codex / Claude / Gemini 会话，减少上下文切换。</span>
+              </article>
+              <article class="hero-point">
+                <strong>Mobile terminal</strong>
+                <span>重连、快捷键、软键盘适配和重要状态回执都放在手边。</span>
+              </article>
             </div>
-            <div class="field">
-              <label for="newSessionPath">project path (可选)</label>
-              <input id="newSessionPath" placeholder="留空时使用 runner 默认工作目录" />
-            </div>
-            <div class="field">
-              <label for="newSessionProjectName">project name (可选)</label>
-              <input id="newSessionProjectName" placeholder="例如 my-workspace" />
-            </div>
-            <button id="btnCreateSession">创建会话</button>
-            <div id="createSessionResult" class="muted" style="font-size:12px"></div>
           </section>
 
-          <section class="detail-card panel">
-            <h3>历史会话</h3>
-            <div class="field">
-              <label for="sessionSearch">筛选会话</label>
-              <input id="sessionSearch" placeholder="按 sessionId、tool、status、path 搜索" />
+          <section class="login-card panel">
+            <div class="section-head">
+              <div>
+                <span class="eyebrow">Sign In</span>
+                <h2>登录控制台</h2>
+              </div>
+              <p class="section-copy">登录后可查看 runner、创建会话并进入浏览器终端。</p>
             </div>
-            <div id="detailSessionSummary" class="muted" style="font-size:13px">-</div>
+
+            <form id="loginForm" class="form-grid">
+              <label class="field">
+                <span>用户名</span>
+                <input id="authUser" autocomplete="username" value="admin" />
+              </label>
+
+              <label class="field">
+                <span>密码</span>
+                <input
+                  id="authPassword"
+                  type="password"
+                  autocomplete="current-password"
+                  placeholder="输入网关密码"
+                />
+              </label>
+
+              <label id="authTotpField" class="field hidden">
+                <span>动态码</span>
+                <input
+                  id="authTotp"
+                  inputmode="numeric"
+                  autocomplete="one-time-code"
+                  placeholder="输入 6 位动态码"
+                />
+              </label>
+
+              <button id="btnLogin" class="button primary submit-button" type="submit">登录</button>
+            </form>
+
+            <div id="loginError" class="inline-feedback error" role="status" aria-live="polite"></div>
+          </section>
+        </div>
+      </section>
+
+      <section id="workspaceView" class="view hidden">
+        <div class="view-stack">
+          <section class="panel masthead">
+            <div>
+              <span class="eyebrow">Runner Fleet</span>
+              <h2>控制台总览</h2>
+              <p id="runnerSummaryText" class="section-copy">-</p>
+            </div>
+            <div class="action-row">
+              <button id="btnOpenSettings" class="button ghost" type="button">设置</button>
+              <button id="btnRefreshRunners" class="button ghost" type="button">刷新</button>
+              <button id="btnLogout" class="button ghost danger" type="button">退出</button>
+            </div>
+          </section>
+
+          <section id="riskBanner" class="panel alert-banner hidden">
+            <div>
+              <div id="riskBannerTitle" class="alert-title">安全提醒</div>
+              <div id="riskBannerBody" class="section-copy">-</div>
+            </div>
+            <button id="btnRiskAction" class="button primary" type="button">立即处理</button>
+          </section>
+
+          <section class="summary-grid">
+            <article class="summary-tile panel">
+              <span class="summary-label">在线 Runner</span>
+              <strong id="statOnline">0</strong>
+              <span class="summary-meta">当前可立即接受任务的节点</span>
+            </article>
+            <article class="summary-tile panel">
+              <span class="summary-label">离线 Runner</span>
+              <strong id="statOffline">0</strong>
+              <span class="summary-meta">需要排查网络、服务或机器状态</span>
+            </article>
+            <article class="summary-tile panel">
+              <span class="summary-label">总会话数</span>
+              <strong id="statSessions">0</strong>
+              <span class="summary-meta">基于当前 runner 数据实时聚合</span>
+            </article>
+            <article class="summary-tile panel">
+              <span class="summary-label">活跃会话</span>
+              <strong id="statActiveSessions">0</strong>
+              <span class="summary-meta">running / starting / stopping</span>
+            </article>
+          </section>
+
+          <section class="panel filter-panel">
+            <div class="section-head compact">
+              <div>
+                <h3>Runner 列表</h3>
+                <p class="section-copy">搜索名称、runnerId、支持工具或在线状态。</p>
+              </div>
+              <div id="cleanupResult" class="inline-feedback" role="status" aria-live="polite"></div>
+            </div>
+            <label class="field">
+              <span>筛选 Runner</span>
+              <input id="runnerSearch" placeholder="例如 mac-mini / codex / online" />
+            </label>
+          </section>
+
+          <main id="runnerList" class="runner-grid"></main>
+        </div>
+      </section>
+
+      <section id="settingsView" class="view hidden">
+        <div class="view-stack">
+          <section class="panel masthead">
+            <div>
+              <span class="eyebrow">Security</span>
+              <h2>发布设置</h2>
+              <p id="settingsSub" class="section-copy">-</p>
+            </div>
+            <div class="action-row">
+              <button id="btnBackFromSettings" class="button ghost" type="button">返回控制台</button>
+            </div>
+          </section>
+
+          <div class="settings-grid">
+            <section class="panel detail-card">
+              <div class="section-head compact">
+                <div>
+                  <h3>账号与密码</h3>
+                  <p class="section-copy">修改控制台登录身份。保存后会强制重新登录。</p>
+                </div>
+              </div>
+              <div class="form-grid">
+                <label class="field">
+                  <span>新用户名</span>
+                  <input id="setNewUser" placeholder="留空表示不修改" />
+                </label>
+                <label class="field">
+                  <span>新密码</span>
+                  <input id="setNewPassword" type="password" placeholder="留空表示不修改" />
+                </label>
+                <label class="field">
+                  <span>当前密码</span>
+                  <input id="setOldPassword" type="password" placeholder="用于确认身份" />
+                </label>
+                <button id="btnSaveAuth" class="button primary" type="button">保存并重新登录</button>
+                <div id="saveAuthResult" class="inline-feedback" role="status" aria-live="polite"></div>
+              </div>
+            </section>
+
+            <section class="panel detail-card">
+              <div class="section-head compact">
+                <div>
+                  <h3>两步验证</h3>
+                  <p class="section-copy">建议上线前强制启用，降低弱口令和会话泄漏风险。</p>
+                </div>
+              </div>
+              <div id="totpStatus" class="status-note">-</div>
+              <div class="action-row wrap">
+                <button id="btnTotpEnable" class="button primary" type="button">前往绑定</button>
+                <button id="btnTotpDisable" class="button ghost danger hidden" type="button">删除两步验证</button>
+              </div>
+              <div id="totpActionResult" class="inline-feedback" role="status" aria-live="polite"></div>
+            </section>
+          </div>
+        </div>
+      </section>
+
+      <section id="runnerDetailView" class="view hidden">
+        <div class="view-stack">
+          <section class="panel masthead">
+            <div>
+              <span class="eyebrow">Runner Detail</span>
+              <h2 id="detailRunnerTitle">Runner</h2>
+              <p id="detailRunnerSub" class="section-copy">-</p>
+            </div>
+            <div class="action-row">
+              <button id="btnBackToRunners" class="button ghost" type="button">返回列表</button>
+              <button id="btnRefreshDetail" class="button ghost" type="button">刷新详情</button>
+            </div>
+          </section>
+
+          <div class="detail-layout">
+            <section class="panel detail-card detail-overview">
+              <div class="section-head compact">
+                <div>
+                  <h3>Runner 能力</h3>
+                  <p id="detailCapabilitySummary" class="section-copy">查看工具可用性、最近心跳和启动建议。</p>
+                </div>
+              </div>
+              <div id="detailTools" class="badge-row"></div>
+              <div id="detailToolHint" class="status-note hidden"></div>
+              <div id="detailMetrics" class="meta-grid"></div>
+              <details class="raw-capabilities">
+                <summary>查看原始能力载荷</summary>
+                <pre id="detailCapabilities"></pre>
+              </details>
+            </section>
+
+            <section class="panel detail-card">
+              <div class="section-head compact">
+                <div>
+                  <h3>新建会话</h3>
+                  <p class="section-copy">选择 CLI agent、工作目录和项目别名，立即为当前 runner 创建新会话。</p>
+                </div>
+              </div>
+              <div class="form-grid">
+                <label class="field">
+                  <span>CLI Agent</span>
+                  <select id="newSessionTool">
+                    <option value="codex">codex</option>
+                    <option value="claude">claude</option>
+                    <option value="gemini">gemini</option>
+                  </select>
+                </label>
+                <label class="field">
+                  <span>project path</span>
+                  <input id="newSessionPath" placeholder="留空时使用 runner 默认工作目录" />
+                </label>
+                <label class="field">
+                  <span>project name</span>
+                  <input id="newSessionProjectName" placeholder="例如 my-workspace" />
+                </label>
+                <button id="btnCreateSession" class="button primary" type="button">创建并进入 Terminal</button>
+                <div id="createSessionResult" class="inline-feedback" role="status" aria-live="polite"></div>
+              </div>
+            </section>
+          </div>
+
+          <section class="panel detail-card">
+            <div class="section-head compact">
+              <div>
+                <h3>会话列表</h3>
+                <p id="detailSessionSummary" class="section-copy">-</p>
+              </div>
+            </div>
+            <label class="field">
+              <span>筛选会话</span>
+              <input id="sessionSearch" placeholder="按 sessionId、tool、status、path 搜索" />
+            </label>
             <div id="detailSessionList" class="session-list"></div>
           </section>
         </div>
-      </div>
-    </section>
+      </section>
 
-    <section id="terminalView" class="view hidden">
-      <div class="terminal-layout">
-        <header class="terminal-head panel">
-          <div class="row">
-            <button class="secondary" id="btnBackFromTerminal">返回</button>
-            <button class="secondary" id="btnTermReconnect">重连</button>
-            <button class="danger" id="btnTermDisconnect">断开</button>
-          </div>
-          <div class="terminal-meta">
-            <h2 id="termTitle" style="font-size:15px">Terminal</h2>
-            <div id="termMeta" class="muted" style="font-size:12px">session: -</div>
-            <div class="terminal-status">
-              <span id="termConn" class="pill term-conn disconnected">未连接</span>
-              <span id="termCursor" class="pill term-cursor">光标 -:-</span>
+      <section id="terminalView" class="view hidden">
+        <div class="terminal-shell">
+          <header class="panel terminal-topbar">
+            <div class="terminal-copy">
+              <span class="eyebrow">Terminal</span>
+              <h2 id="termTitle">Session</h2>
+              <p id="termMeta" class="section-copy">session: -</p>
             </div>
-          </div>
-        </header>
+            <div class="terminal-status-row">
+              <span id="termConn" class="chip state disconnected">未连接</span>
+              <span id="termCursor" class="chip subtle">光标 -:-</span>
+            </div>
+          </header>
 
-        <div class="terminal-card panel">
-          <div id="termHost" class="term-host"></div>
-          <div id="termHint" class="term-hint">移动端支持快捷键分组、Ctrl/Alt 粘滞键和方向键长按连发。</div>
-          <div id="termMobileKeys" class="term-mobile-keys" aria-label="终端快捷键">
-            <div class="term-mobile-group" aria-label="输入控制">
-              <button class="secondary" data-term-key="ctrl" data-mod="ctrl" aria-pressed="false" type="button">Ctrl</button>
-              <button class="secondary" data-term-key="alt" data-mod="alt" aria-pressed="false" type="button">Alt</button>
-              <button class="secondary" data-term-key="esc" type="button">Esc</button>
-              <button class="secondary" data-term-key="tab" type="button">Tab</button>
-              <button class="secondary" data-term-key="enter" type="button">Enter</button>
-              <button class="secondary" data-term-key="backspace" type="button">⌫</button>
+          <section class="panel terminal-panel">
+            <div id="termHost" class="term-host"></div>
+            <div class="terminal-support">
+              <p id="termHint" class="section-copy">
+                移动端提供 Ctrl / Alt 粘滞键、方向键长按连发和快速唤起软键盘。
+              </p>
+              <div class="terminal-action-row">
+                <button id="btnBackFromTerminal" class="button ghost" type="button">返回</button>
+                <button id="btnTermReconnect" class="button ghost" type="button">重连</button>
+                <button id="btnTermDisconnect" class="button ghost danger" type="button">断开</button>
+              </div>
             </div>
-            <div class="term-mobile-group" aria-label="导航控制">
-              <button class="secondary" data-term-key="home" type="button">Home</button>
-              <button class="secondary" data-term-key="end" type="button">End</button>
-              <button class="secondary" data-term-key="pgup" type="button">PgUp</button>
-              <button class="secondary" data-term-key="pgdn" type="button">PgDn</button>
-              <button class="secondary" data-term-key="keyboard" type="button">键盘</button>
+
+            <div id="termMobileKeys" class="term-mobile-keys" aria-label="终端快捷键">
+              <div class="term-mobile-group" aria-label="修饰键">
+                <button class="button ghost" data-term-key="ctrl" data-mod="ctrl" aria-pressed="false" type="button">Ctrl</button>
+                <button class="button ghost" data-term-key="alt" data-mod="alt" aria-pressed="false" type="button">Alt</button>
+                <button class="button ghost" data-term-key="esc" type="button">Esc</button>
+                <button class="button ghost" data-term-key="tab" type="button">Tab</button>
+                <button class="button ghost" data-term-key="enter" type="button">Enter</button>
+                <button class="button ghost" data-term-key="backspace" type="button">⌫</button>
+              </div>
+              <div class="term-mobile-group" aria-label="导航键">
+                <button class="button ghost" data-term-key="home" type="button">Home</button>
+                <button class="button ghost" data-term-key="end" type="button">End</button>
+                <button class="button ghost" data-term-key="pgup" type="button">PgUp</button>
+                <button class="button ghost" data-term-key="pgdn" type="button">PgDn</button>
+                <button class="button ghost" data-term-key="keyboard" type="button">键盘</button>
+              </div>
+              <div class="term-mobile-group" aria-label="会话操作">
+                <button class="button ghost" data-term-key="ctrlc" type="button">Ctrl+C</button>
+                <button class="button ghost" data-term-key="ctrld" type="button">Ctrl+D</button>
+                <button class="button ghost" data-term-key="left" type="button">←</button>
+                <button class="button ghost" data-term-key="up" type="button">↑</button>
+                <button class="button ghost" data-term-key="down" type="button">↓</button>
+                <button class="button ghost" data-term-key="right" type="button">→</button>
+              </div>
             </div>
-            <div class="term-mobile-group" aria-label="会话控制">
-              <button class="secondary" data-term-key="ctrlc" type="button">Ctrl+C</button>
-              <button class="secondary" data-term-key="ctrld" type="button">Ctrl+D</button>
-              <button class="secondary" data-term-key="left" type="button">←</button>
-              <button class="secondary" data-term-key="up" type="button">↑</button>
-              <button class="secondary" data-term-key="down" type="button">↓</button>
-              <button class="secondary" data-term-key="right" type="button">→</button>
-            </div>
-          </div>
+          </section>
         </div>
-      </div>
-    </section>
+      </section>
+    </main>
   </div>
 
-  <div id="modalMask" class="hidden" style="position:fixed;inset:0;background:rgba(15,23,42,0.45);display:flex;align-items:center;justify-content:center;padding:18px;z-index:9999">
-    <div class="panel" style="width:min(520px,96vw);padding:16px 16px 14px 16px">
-      <div id="modalTitle" style="font-weight:800;font-size:14px;letter-spacing:-0.2px">提示</div>
-      <div id="modalBody" class="muted" style="margin-top:8px;line-height:1.5"></div>
-      <div id="modalFields" style="margin-top:12px;display:grid;gap:10px"></div>
-      <div class="row" style="margin-top:14px;justify-content:flex-end">
-        <button class="secondary" id="modalCancel">取消</button>
-        <button id="modalOk">确认</button>
+  <div id="modalMask" class="modal-mask hidden" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+    <div class="modal-card panel">
+      <div class="section-head compact">
+        <div>
+          <h3 id="modalTitle">提示</h3>
+          <p id="modalBody" class="section-copy"></p>
+        </div>
+      </div>
+      <div id="modalFields" class="form-grid"></div>
+      <div class="action-row end">
+        <button id="modalCancel" class="button ghost" type="button">取消</button>
+        <button id="modalOk" class="button primary" type="button">确认</button>
       </div>
     </div>
   </div>
 
   <script src="/assets/xterm/xterm.js"></script>
   <script src="/assets/xterm/xterm-addon-fit.js"></script>
-  <script>
-    const $ = (id) => document.getElementById(id);
-    const termEncoder = new TextEncoder();
-    const termDecoder = new TextDecoder();
-    const THEME_STORAGE_KEY = 'agentmesh_ui_theme';
-    const THEME_LIGHT = 'light';
-    const THEME_DARK = 'dark';
-    let currentTheme = THEME_LIGHT;
-
-    function readThemePreference() {
-      try {
-        const stored = String(localStorage.getItem(THEME_STORAGE_KEY) || '').toLowerCase();
-        if (stored === THEME_LIGHT || stored === THEME_DARK) return stored;
-      } catch {}
-      const prefersDark = !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
-      return prefersDark ? THEME_DARK : THEME_LIGHT;
-    }
-
-    function refreshThemeToggle(theme) {
-      const btn = $('btnThemeToggle');
-      if (!btn) return;
-      const dark = theme === THEME_DARK;
-      btn.textContent = dark ? '切换日间' : '切换夜间';
-      btn.setAttribute('aria-label', dark ? '切换到日间模式' : '切换到夜间模式');
-      btn.title = dark ? '切换到日间模式' : '切换到夜间模式';
-    }
-
-    function getXtermTheme(theme) {
-      if (theme === THEME_DARK) {
-        return {
-          background: '#040506',
-          foreground: '#f3f4f6',
-          cursor: '#f3f4f6',
-          cursorAccent: '#040506',
-          selectionBackground: 'rgba(148, 163, 184, 0.35)',
-        };
-      }
-      return {
-        background: '#ffffff',
-        foreground: '#111827',
-        cursor: '#111827',
-        cursorAccent: '#ffffff',
-        selectionBackground: 'rgba(15, 23, 42, 0.20)',
-      };
-    }
-
-    function applyTerminalTheme(theme) {
-      if (termMode !== 'xterm' || !term) return;
-      try {
-        term.options.theme = getXtermTheme(theme);
-        term.refresh(0, Math.max(0, term.rows - 1));
-      } catch {}
-    }
-
-    function applyTheme(theme, persist = true) {
-      const next = theme === THEME_DARK ? THEME_DARK : THEME_LIGHT;
-      currentTheme = next;
-      const root = document.documentElement;
-      if (root) {
-        if (next === THEME_DARK) root.setAttribute('data-theme', THEME_DARK);
-        else root.removeAttribute('data-theme');
-      }
-      refreshThemeToggle(next);
-      applyTerminalTheme(next);
-      if (!persist) return;
-      try { localStorage.setItem(THEME_STORAGE_KEY, next); } catch {}
-    }
-
-    function toggleTheme() {
-      applyTheme(currentTheme === THEME_DARK ? THEME_LIGHT : THEME_DARK, true);
-    }
-
-    function initTheme() {
-      applyTheme(readThemePreference(), false);
-    }
-
-    const state = {
-      view: 'login',
-      returnView: 'runnerDetail',
-      auth: {
-        authenticated: false,
-        user: '',
-        csrfToken: '',
-        expiresAt: 0,
-      },
-      runnersAll: [],
-      runnerSummary: { total: 0, online: 0, offline: 0, returned: 0 },
-      selectedRunnerId: '',
-      runnerDetail: null,
-      activeSession: null,
-      autoRefreshTimer: null,
-      eventSource: null,
-      eventRetryTimer: null,
-      eventRetryAttempt: 0,
-      runnerSearch: '',
-      sessionSearch: '',
-    };
-
-    function setEmptyText(el, text) {
-      if (!el) return;
-      el.innerHTML = '';
-      const tip = document.createElement('div');
-      tip.className = 'empty';
-      tip.textContent = String(text || '');
-      el.appendChild(tip);
-    }
-
-    function modalHide() {
-      $('modalMask').classList.add('hidden');
-      $('modalTitle').textContent = '';
-      $('modalBody').textContent = '';
-      $('modalFields').innerHTML = '';
-      $('modalOk').onclick = null;
-      $('modalCancel').onclick = null;
-    }
-
-    function modalShow(opts) {
-      const title = (opts && opts.title) ? String(opts.title) : '提示';
-      const body = (opts && opts.body) ? String(opts.body) : '';
-      const okText = (opts && opts.okText) ? String(opts.okText) : '确认';
-      const cancelText = (opts && opts.cancelText) ? String(opts.cancelText) : '取消';
-      const fields = Array.isArray(opts && opts.fields) ? opts.fields : [];
-
-      $('modalTitle').textContent = title;
-      $('modalBody').textContent = body;
-      $('modalFields').innerHTML = '';
-
-      const values = {};
-      for (const f of fields) {
-        const wrap = document.createElement('div');
-        wrap.className = 'field';
-        const label = document.createElement('label');
-        label.textContent = f.label || '';
-        const input = document.createElement('input');
-        input.placeholder = f.placeholder || '';
-        if (f.type) input.type = f.type;
-        if (f.inputmode) input.setAttribute('inputmode', f.inputmode);
-        if (f.autocomplete) input.setAttribute('autocomplete', f.autocomplete);
-        input.oninput = () => { values[f.key] = input.value; };
-        values[f.key] = '';
-        wrap.appendChild(label);
-        wrap.appendChild(input);
-        $('modalFields').appendChild(wrap);
-        setTimeout(() => input.focus(), 0);
-      }
-
-      $('modalOk').textContent = okText;
-      $('modalCancel').textContent = cancelText;
-
-      $('modalCancel').onclick = () => {
-        modalHide();
-        if (opts && typeof opts.onCancel === 'function') opts.onCancel();
-      };
-
-      $('modalOk').onclick = async () => {
-        if (opts && typeof opts.onOk === 'function') {
-          await opts.onOk(values);
-        }
-        modalHide();
-      };
-
-      $('modalMask').classList.remove('hidden');
-    }
-
-    const DEFAULT_TERM_COLS = 120;
-    const DEFAULT_TERM_ROWS = 34;
-    const BASIC_TERM_MAX_CHARS = 200000;
-    const TOOL_ORDER = ['codex', 'claude', 'gemini'];
-    const MOBILE_TERM_ACTIONS = {
-      esc: '\x1b',
-      tab: '\t',
-      enter: '\r',
-      backspace: '\x7f',
-      up: '\x1b[A',
-      down: '\x1b[B',
-      right: '\x1b[C',
-      left: '\x1b[D',
-      home: '\x1b[H',
-      end: '\x1b[F',
-      pgup: '\x1b[5~',
-      pgdn: '\x1b[6~',
-    };
-    const MOBILE_TERM_REPEATABLE_KEYS = new Set(['up', 'down', 'left', 'right', 'backspace']);
-    const MOBILE_TERM_REPEAT_DELAY_MS = 320;
-    const MOBILE_TERM_REPEAT_INTERVAL_MS = 68;
-
-    let termMode = 'none';
-    let term = null;
-    let fitAddon = null;
-    let basicOut = null;
-    let termWs = null;
-    let pendingTermOutput = '';
-    let termFlushTimer = 0;
-    let resizeRafId = 0;
-    let cursorRafId = 0;
-    let viewportRafId = 0;
-    let resizeObserver = null;
-    let liveRefreshRunning = false;
-    let liveRefreshQueued = false;
-    let mobileTermCtrlLock = false;
-    let mobileTermAltLock = false;
-    let mobileTermRepeatDelayTimer = 0;
-    let mobileTermRepeatIntervalTimer = 0;
-
-    function setTermConnection(status, label = '') {
-      const pill = $('termConn');
-      if (!pill) return;
-      const normalized = String(status || 'disconnected');
-      const map = {
-        connected: '已连接',
-        connecting: '连接中',
-        disconnected: '未连接',
-        error: '连接异常',
-      };
-      pill.className = 'pill term-conn ' + normalized;
-      pill.textContent = label || map[normalized] || normalized;
-    }
-
-    function updateTermCursorIndicator() {
-      const pill = $('termCursor');
-      if (!pill) return;
-      if (termMode === 'xterm' && term && term.buffer && term.buffer.active) {
-        const row = term.buffer.active.cursorY + 1;
-        const col = term.buffer.active.cursorX + 1;
-        pill.textContent = '光标 ' + row + ':' + col;
-        return;
-      }
-      pill.textContent = '光标 -:-';
-    }
-
-    function scheduleCursorRefresh() {
-      if (cursorRafId) return;
-      const raf = typeof requestAnimationFrame === 'function'
-        ? requestAnimationFrame
-        : (fn) => setTimeout(fn, 16);
-      cursorRafId = raf(() => {
-        cursorRafId = 0;
-        updateTermCursorIndicator();
-      });
-    }
-
-    function flushTermOutput() {
-      termFlushTimer = 0;
-      const chunk = pendingTermOutput;
-      pendingTermOutput = '';
-      if (!chunk) return;
-      if (termMode === 'xterm' && term) {
-        term.write(chunk, () => scheduleCursorRefresh());
-      } else if (termMode === 'basic' && basicOut) {
-        const next = (basicOut.textContent || '') + chunk;
-        basicOut.textContent = next.length > BASIC_TERM_MAX_CHARS ? next.slice(-BASIC_TERM_MAX_CHARS) : next;
-        basicOut.scrollTop = basicOut.scrollHeight;
-      }
-    }
-
-    function queueTermOutput(text) {
-      const val = String(text || '');
-      if (!val) return;
-      pendingTermOutput += val;
-      if (termFlushTimer) return;
-      const raf = typeof requestAnimationFrame === 'function'
-        ? requestAnimationFrame
-        : (fn) => setTimeout(fn, 16);
-      termFlushTimer = raf(() => flushTermOutput());
-    }
-
-    function setViewportHeight() {
-      const root = document.documentElement;
-      if (!root) return;
-      let height = window.innerHeight;
-      if (window.visualViewport && Number.isFinite(window.visualViewport.height)) {
-        height = Math.max(320, Math.floor(window.visualViewport.height));
-      }
-      root.style.setProperty('--app-height', height + 'px');
-    }
-
-    function detectKeyboardOpen() {
-      if (!window.visualViewport) return false;
-      const layoutHeight = window.innerHeight;
-      const visualHeight = window.visualViewport.height;
-      if (!layoutHeight || !visualHeight) return false;
-      return (layoutHeight - visualHeight) > 110;
-    }
-
-    function applyViewportState() {
-      setViewportHeight();
-      document.body.classList.toggle('keyboard-open', detectKeyboardOpen() && state.view === 'terminal');
-    }
-
-    function scheduleViewportRefresh() {
-      if (viewportRafId) return;
-      const raf = typeof requestAnimationFrame === 'function'
-        ? requestAnimationFrame
-        : (fn) => setTimeout(fn, 16);
-      viewportRafId = raf(() => {
-        viewportRafId = 0;
-        applyViewportState();
-        scheduleResizeSync();
-      });
-    }
-
-    function scheduleResizeSync() {
-      if (resizeRafId) return;
-      const raf = typeof requestAnimationFrame === 'function'
-        ? requestAnimationFrame
-        : (fn) => setTimeout(fn, 16);
-      resizeRafId = raf(() => {
-        resizeRafId = 0;
-        sendResize();
-      });
-    }
-
-    function queueLiveRefresh() {
-      if (liveRefreshRunning) {
-        liveRefreshQueued = true;
-        return;
-      }
-      liveRefreshRunning = true;
-
-      let task = null;
-      if (state.view === 'workspace') {
-        task = refreshRunnerList(false);
-      } else if (state.view === 'runnerDetail' && state.selectedRunnerId) {
-        task = refreshRunnerDetail(false);
-      }
-
-      Promise.resolve(task)
-        .catch(() => {})
-        .finally(() => {
-          liveRefreshRunning = false;
-          if (liveRefreshQueued) {
-            liveRefreshQueued = false;
-            queueLiveRefresh();
-          }
-        });
-    }
-
-    function closeEventStream(resetRetry = true) {
-      if (state.eventRetryTimer) {
-        clearTimeout(state.eventRetryTimer);
-        state.eventRetryTimer = null;
-      }
-      if (resetRetry) state.eventRetryAttempt = 0;
-      if (state.eventSource) {
-        try { state.eventSource.close(); } catch {}
-        state.eventSource = null;
-      }
-    }
-
-    function scheduleEventStreamReconnect() {
-      if (!state.auth.authenticated || state.view === 'terminal' || state.view === 'settings') return;
-      if (state.eventRetryTimer) return;
-      const delay = Math.min(15000, Math.max(600, 600 * (2 ** state.eventRetryAttempt)));
-      state.eventRetryAttempt += 1;
-      state.eventRetryTimer = setTimeout(() => {
-        state.eventRetryTimer = null;
-        ensureEventStream();
-      }, delay);
-    }
-
-    function ensureEventStream() {
-      if (!state.auth.authenticated || state.view === 'terminal' || state.view === 'settings') {
-        closeEventStream();
-        return;
-      }
-      if (state.eventSource) return;
-      if (typeof EventSource === 'undefined') return;
-
-      const es = new EventSource('/api/events/stream');
-      state.eventSource = es;
-
-      const onData = () => {
-        state.eventRetryAttempt = 0;
-        queueLiveRefresh();
-      };
-
-      es.addEventListener('connected', onData);
-      es.addEventListener('update', onData);
-      es.onerror = () => {
-        closeEventStream(false);
-        scheduleEventStreamReconnect();
-      };
-    }
-
-    function showView(next) {
-      state.view = next;
-      $('loginView').classList.toggle('hidden', next !== 'login');
-      $('workspaceView').classList.toggle('hidden', next !== 'workspace');
-      $('settingsView').classList.toggle('hidden', next !== 'settings');
-      $('runnerDetailView').classList.toggle('hidden', next !== 'runnerDetail');
-      $('terminalView').classList.toggle('hidden', next !== 'terminal');
-      const inTerminal = next === 'terminal';
-      document.body.classList.toggle('terminal-active', inTerminal);
-      $('appRoot').classList.toggle('terminal-mode', inTerminal);
-      if (!inTerminal) {
-        clearMobileTermRepeat();
-        resetMobileModifiers();
-        disconnectTerminal(false);
-        setTermConnection('disconnected');
-      } else {
-        setTermConnection('connecting');
-        syncMobileModifierPills();
-        scheduleCursorRefresh();
-        scheduleResizeSync();
-      }
-      applyViewportState();
-      ensureAutoRefresh();
-    }
-
-    function ensureAutoRefresh() {
-      if (state.autoRefreshTimer) {
-        clearInterval(state.autoRefreshTimer);
-        state.autoRefreshTimer = null;
-      }
-      if (!state.auth.authenticated || state.view === 'terminal' || state.view === 'settings') {
-        closeEventStream();
-        return;
-      }
-
-      if (typeof EventSource !== 'undefined') {
-        ensureEventStream();
-        return;
-      }
-
-      state.autoRefreshTimer = setInterval(() => {
-        queueLiveRefresh();
-      }, 6000);
-    }
-
-    function setAuth(authPayload) {
-      state.auth.authenticated = !!(authPayload && authPayload.authenticated);
-      state.auth.user = authPayload && authPayload.user ? authPayload.user : '';
-      state.auth.csrfToken = authPayload && authPayload.csrfToken ? authPayload.csrfToken : '';
-      state.auth.expiresAt = Number(authPayload && authPayload.expiresAt ? authPayload.expiresAt : 0);
-      $('authBadge').textContent = state.auth.authenticated ? ('user: ' + state.auth.user) : '未登录';
-    }
-
-    function setLoginTotpMode(enabled) {
-      const on = !!enabled;
-      $('authTotpField').classList.toggle('hidden', !on);
-      if (!on) {
-        $('authTotp').value = '';
-      }
-      $('btnLogin').textContent = on ? '验证并登录' : '登录';
-    }
-
-    function resetAuth() {
-      closeEventStream();
-      if (state.autoRefreshTimer) {
-        clearInterval(state.autoRefreshTimer);
-        state.autoRefreshTimer = null;
-      }
-      setAuth({ authenticated: false, user: '', csrfToken: '', expiresAt: 0 });
-      state.runnersAll = [];
-      state.runnerDetail = null;
-      state.selectedRunnerId = '';
-      state.activeSession = null;
-      state.runnerSearch = '';
-      state.sessionSearch = '';
-      $('runnerSearch').value = '';
-      $('sessionSearch').value = '';
-      setLoginTotpMode(false);
-      setTermConnection('disconnected');
-      updateTermCursorIndicator();
-      clearMobileTermRepeat();
-      resetMobileModifiers();
-      applyViewportState();
-    }
-
-    async function api(method, path, body) {
-      const m = String(method || 'GET').toUpperCase();
-      const headers = {};
-      const hasBody = body !== undefined && body !== null;
-      if (hasBody) {
-        headers['Content-Type'] = 'application/json';
-      }
-      if ((m === 'POST' || m === 'PUT' || m === 'PATCH' || m === 'DELETE') && state.auth.csrfToken) {
-        headers['X-AgentMesh-CSRF'] = state.auth.csrfToken;
-      }
-
-      const res = await fetch(path, {
-        method: m,
-        headers,
-        body: hasBody ? JSON.stringify(body) : undefined,
-      });
-
-      const raw = await res.text();
-      let data;
-      try { data = JSON.parse(raw); }
-      catch { data = { raw }; }
-
-      if (!res.ok) {
-        const err = Object.assign(new Error('HTTP ' + res.status), { status: res.status, data });
-        if (res.status === 401 && !path.startsWith('/api/auth/')) {
-          resetAuth();
-          showView('login');
-        }
-        throw err;
-      }
-      return data;
-    }
-
-    function toolLabel(tool) {
-      const t = String(tool || '').toLowerCase();
-      if (t === 'codex') return 'Codex';
-      if (t === 'claude') return 'Claude';
-      if (t === 'gemini') return 'Gemini';
-      return (tool || 'Unknown');
-    }
-
-    function prettyTime(ts) {
-      const n = Number(ts || 0);
-      if (!n) return '-';
-      try { return new Date(n).toLocaleString(); }
-      catch { return '-'; }
-    }
-
-    function normalizeSearch(raw) {
-      return String(raw || '').trim().toLowerCase();
-    }
-
-    function shellQuoteSingle(raw) {
-      return "'" + String(raw || '').replace(/'/g, "'\\''") + "'";
-    }
-
-    function buildClaudeResumeCommand(session) {
-      if (!session || String(session.tool || '').toLowerCase() !== 'claude') return '';
-      const sessionId = String(session.id || '').trim();
-      if (!sessionId) return '';
-      const projectPath = typeof session.projectPath === 'string' ? session.projectPath.trim() : '';
-      if (!projectPath) return 'claude --resume ' + sessionId;
-      return 'cd ' + shellQuoteSingle(projectPath) + ' && claude --resume ' + sessionId;
-    }
-
-    function buildGeminiLaunchCommand(session, runner) {
-      if (!session || String(session.tool || '').toLowerCase() !== 'gemini') return '';
-      const detail = getRunnerToolDetail(runner, 'gemini');
-      const command = detail && detail.command ? detail.command : 'gemini';
-      const projectPath = typeof session.projectPath === 'string' ? session.projectPath.trim() : '';
-      if (!projectPath) return command;
-      return 'cd ' + shellQuoteSingle(projectPath) + ' && ' + command;
-    }
-
-    function runnerMatchesSearch(runner, query) {
-      if (!query) return true;
-      const name = String(runner && runner.name ? runner.name : '').toLowerCase();
-      const id = String(runner && runner.id ? runner.id : '').toLowerCase();
-      const tools = runnerSupportedTools(runner)
-        .map((x) => String(x || '').toLowerCase())
-        .join(' ');
-      const status = runner && runner.online ? 'online 在线' : 'offline 离线';
-      const geminiDetail = getRunnerToolDetail(runner, 'gemini');
-      const geminiHint = [
-        geminiDetail && geminiDetail.command,
-        geminiDetail && geminiDetail.source,
-        geminiDetail && geminiDetail.reason,
-        geminiDetail ? (geminiDetail.available ? 'available 可用' : 'unavailable 不可用') : '',
-      ]
-        .filter(Boolean)
-        .join(' ')
-        .toLowerCase();
-      return (
-        name.includes(query) ||
-        id.includes(query) ||
-        tools.includes(query) ||
-        status.includes(query) ||
-        geminiHint.includes(query)
-      );
-    }
-
-    function sessionMatchesSearch(session, query) {
-      if (!query) return true;
-      const values = [
-        session && session.id,
-        session && session.tool,
-        session && session.status,
-        session && session.projectPath,
-        session && session.createdBy,
-      ]
-        .map((x) => String(x || '').toLowerCase());
-      return values.some((x) => x.includes(query));
-    }
-
-    async function copyTextToClipboard(text) {
-      const val = String(text || '');
-      if (!val) throw new Error('empty text');
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        await navigator.clipboard.writeText(val);
-        return;
-      }
-      const input = document.createElement('textarea');
-      input.value = val;
-      input.setAttribute('readonly', 'readonly');
-      input.style.position = 'fixed';
-      input.style.opacity = '0';
-      document.body.appendChild(input);
-      input.select();
-      const copied = document.execCommand('copy');
-      document.body.removeChild(input);
-      if (!copied) throw new Error('copy failed');
-    }
-
-    async function copyClaudeResumeCommand(session) {
-      const command = buildClaudeResumeCommand(session);
-      if (!command) return;
-      try {
-        await copyTextToClipboard(command);
-        const hint = $('createSessionResult');
-        hint.textContent = '已复制：' + command;
-        setTimeout(() => {
-          if (hint.textContent === '已复制：' + command) hint.textContent = '';
-        }, 2200);
-      } catch (e) {
-        window.alert('复制失败: ' + String((e && e.message) || e || 'unknown'));
-      }
-    }
-
-    async function copyGeminiLaunchCommand(session, runner) {
-      const command = buildGeminiLaunchCommand(session, runner);
-      if (!command) return;
-      try {
-        await copyTextToClipboard(command);
-        const hint = $('createSessionResult');
-        hint.textContent = '已复制 Gemini 命令：' + command;
-        setTimeout(() => {
-          if (hint.textContent === '已复制 Gemini 命令：' + command) hint.textContent = '';
-        }, 2200);
-      } catch (e) {
-        window.alert('复制失败: ' + String((e && e.message) || e || 'unknown'));
-      }
-    }
-
-    function toolsFromCapabilities(capabilities) {
-      const tools = capabilities && capabilities.tools ? capabilities.tools : {};
-      return Object.keys(tools).filter((k) => !!tools[k]);
-    }
-
-    function toolDetailsFromCapabilities(capabilities) {
-      const raw = capabilities && capabilities.toolDetails && typeof capabilities.toolDetails === 'object'
-        ? capabilities.toolDetails
-        : {};
-      const details = {};
-      for (const tool of TOOL_ORDER) {
-        const item = raw[tool];
-        if (!item || typeof item !== 'object') continue;
-        details[tool] = {
-          command: typeof item.command === 'string' ? item.command : '',
-          source: typeof item.source === 'string' ? item.source : '',
-          available: item.available === true,
-          reason: typeof item.reason === 'string' ? item.reason : '',
-        };
-      }
-      return details;
-    }
-
-    function getRunnerToolDetail(runner, tool) {
-      const toolName = String(tool || '').toLowerCase();
-      if (!TOOL_ORDER.includes(toolName)) return null;
-      const details = toolDetailsFromCapabilities(runner && runner.capabilities);
-      return details[toolName] || null;
-    }
-
-    function buildGeminiDiagnosticText(runner) {
-      const detail = getRunnerToolDetail(runner, 'gemini');
-      if (!detail) return '';
-      if (detail.available) {
-        if (detail.source === 'fallback') {
-          return 'Gemini 可用：使用 npx fallback（' + detail.command + '）。';
-        }
-        if (detail.source === 'env') {
-          return 'Gemini 可用：使用 AGENTMESH_GEMINI_CMD（' + detail.command + '）。';
-        }
-        return 'Gemini 可用：命令 ' + detail.command + '。';
-      }
-      const reason = detail.reason ? detail.reason : 'runner 未检测到可执行命令';
-      return 'Gemini 不可用：' + reason + '。可安装 gemini CLI 或设置 AGENTMESH_GEMINI_CMD。';
-    }
-
-    function runnerSupportedTools(runner) {
-      const fromRunner = Array.isArray(runner && runner.supportedTools) ? runner.supportedTools : null;
-      if (fromRunner) {
-        const set = new Set(fromRunner.map((x) => String(x || '').toLowerCase()));
-        return TOOL_ORDER.filter((x) => set.has(x));
-      }
-      const fromCapabilities = toolsFromCapabilities(runner && runner.capabilities).map((x) => String(x || '').toLowerCase());
-      if (!fromCapabilities.length) return ['codex', 'claude'];
-      const set = new Set(fromCapabilities);
-      return TOOL_ORDER.filter((x) => set.has(x));
-    }
-
-    function refreshNewSessionToolOptions(runner) {
-      const select = $('newSessionTool');
-      const result = $('createSessionResult');
-      const prev = String(select.value || '').toLowerCase();
-      const supported = runnerSupportedTools(runner);
-      select.innerHTML = '';
-
-      if (!supported.length) {
-        const option = document.createElement('option');
-        option.value = '';
-        option.textContent = 'no supported tool';
-        select.appendChild(option);
-        select.disabled = true;
-        $('btnCreateSession').disabled = true;
-        result.textContent = '当前 runner 未上报可用工具，暂不可创建会话。';
-        return;
-      }
-
-      for (const tool of supported) {
-        const option = document.createElement('option');
-        option.value = tool;
-        option.textContent = tool;
-        select.appendChild(option);
-      }
-
-      select.disabled = false;
-      $('btnCreateSession').disabled = false;
-      if (supported.includes(prev)) {
-        select.value = prev;
-      } else {
-        select.value = supported[0];
-      }
-    }
-
-    function renderRunnerList() {
-      const host = $('runnerList');
-      host.innerHTML = '';
-      const query = normalizeSearch(state.runnerSearch);
-      const all = [...state.runnersAll];
-      all.sort((a, b) => {
-        const ao = a.online ? 1 : 0;
-        const bo = b.online ? 1 : 0;
-        if (ao !== bo) return bo - ao;
-        return Number(b.lastSeenAt || 0) - Number(a.lastSeenAt || 0);
-      });
-
-      const filtered = query ? all.filter((runner) => runnerMatchesSearch(runner, query)) : all;
-      $('runnerSummaryText').textContent =
-        '在线 ' + state.runnerSummary.online + ' 台 · 离线 ' + state.runnerSummary.offline + ' 台 · 总计 ' + state.runnerSummary.total + ' 台' +
-        (query ? (' · 匹配 ' + filtered.length + ' 台') : '');
-
-      if (!filtered.length) {
-        const empty = document.createElement('div');
-        empty.className = 'empty';
-        empty.textContent = query ? '没有匹配的 runner。' : '当前没有 runner。';
-        host.appendChild(empty);
-        return;
-      }
-
-      for (const [idx, runner] of filtered.entries()) {
-        const card = document.createElement('button');
-        card.className = 'runner-card';
-        card.style.setProperty('--stagger', String(idx));
-
-        const top = document.createElement('div');
-        top.className = 'row';
-        const dot = document.createElement('span');
-        dot.className = 'dot ' + (runner.online ? 'on' : 'off');
-        const title = document.createElement('strong');
-        title.textContent = runner.name || runner.id;
-        top.appendChild(dot);
-        top.appendChild(title);
-
-        const rid = document.createElement('div');
-        rid.className = 'runner-id';
-        rid.textContent = 'runnerId: ' + runner.id;
-        // runnerId is intentionally hidden by CSS (not needed for normal ops).
-
-        const tools = document.createElement('div');
-        tools.className = 'tools';
-        const toolList = runnerSupportedTools(runner);
-        if (!toolList.length) {
-          const badge = document.createElement('span');
-          badge.className = 'tool-badge';
-          badge.textContent = 'UNKNOWN';
-          tools.appendChild(badge);
-        } else {
-          for (const t of toolList) {
-            const badge = document.createElement('span');
-            badge.className = 'tool-badge';
-            badge.textContent = toolLabel(t);
-            tools.appendChild(badge);
-          }
-        }
-
-        const meta = document.createElement('div');
-        meta.className = 'muted';
-        meta.style.fontSize = '12px';
-        meta.textContent = (runner.online ? '在线' : '离线') + ' · lastSeen ' + prettyTime(runner.lastSeenAt);
-
-        const actions = document.createElement('div');
-        actions.className = 'row';
-        actions.style.marginTop = '2px';
-
-        const btnOpen = document.createElement('button');
-        btnOpen.className = 'secondary';
-        btnOpen.textContent = '详情';
-        btnOpen.onclick = (ev) => {
-          ev.preventDefault();
-          ev.stopPropagation();
-          openRunnerDetail(runner.id);
-        };
-
-        const btnDelete = document.createElement('button');
-        btnDelete.className = 'danger';
-        btnDelete.textContent = '删除';
-        btnDelete.onclick = (ev) => {
-          ev.preventDefault();
-          ev.stopPropagation();
-          deleteRunner(runner.id);
-        };
-
-        actions.appendChild(btnOpen);
-        actions.appendChild(btnDelete);
-
-        card.appendChild(top);
-        card.appendChild(rid);
-        card.appendChild(tools);
-        card.appendChild(meta);
-        card.appendChild(actions);
-        card.onclick = () => openRunnerDetail(runner.id);
-        host.appendChild(card);
-      }
-    }
-
-    async function refreshRunnerList(showError = true) {
-      try {
-        const data = await api('GET', '/api/runners');
-        state.runnersAll = Array.isArray(data && data.runners) ? data.runners : [];
-        state.runnerSummary = data && data.summary ? data.summary : {
-          total: state.runnersAll.length,
-          online: state.runnersAll.filter((x) => x.online).length,
-          offline: state.runnersAll.filter((x) => !x.online).length,
-          returned: state.runnersAll.length,
-        };
-        renderRunnerList();
-      } catch (e) {
-        if (showError) {
-          const msg = String((e && e.data && e.data.error) || (e && e.message) || '刷新失败');
-          setEmptyText($('runnerList'), '加载失败: ' + msg);
-        }
-      }
-    }
-
-    function renderRunnerDetail() {
-      const detail = state.runnerDetail;
-      if (!detail || !detail.runner) return;
-
-      const runner = detail.runner;
-      const supportedTools = runnerSupportedTools(runner);
-      $('detailRunnerTitle').textContent = (runner.name || runner.id) + ' 详情';
-      $('detailRunnerSub').textContent =
-        (runner.online ? '在线' : '离线') +
-        ' · lastSeen ' + prettyTime(runner.lastSeenAt) +
-        ' · tools ' + (supportedTools.length ? supportedTools.map((x) => toolLabel(x)).join('/') : 'none');
-
-      const toolsHost = $('detailTools');
-      toolsHost.innerHTML = '';
-      const tools = supportedTools;
-      if (!tools.length) {
-        const badge = document.createElement('span');
-        badge.className = 'tool-badge';
-        badge.textContent = 'UNKNOWN';
-        toolsHost.appendChild(badge);
-      } else {
-        for (const t of tools) {
-          const badge = document.createElement('span');
-          badge.className = 'tool-badge';
-          badge.textContent = toolLabel(t);
-          toolsHost.appendChild(badge);
-        }
-      }
-      const toolHint = $('detailToolHint');
-      const geminiHint = buildGeminiDiagnosticText(runner);
-      toolHint.textContent = geminiHint;
-      toolHint.classList.toggle('hidden', !geminiHint);
-      refreshNewSessionToolOptions(runner);
-
-      // Hide raw capabilities JSON in production-like UI.
-      $('detailCapabilities').textContent = '';
-      const allSessions = Array.isArray(detail.sessions) ? detail.sessions : [];
-      const sessionQuery = normalizeSearch(state.sessionSearch);
-      const sessions = sessionQuery
-        ? allSessions.filter((session) => sessionMatchesSearch(session, sessionQuery))
-        : allSessions;
-      $('detailSessionSummary').textContent =
-        '总会话: ' + (detail.summary ? detail.summary.totalSessions : allSessions.length) +
-        ' | 活跃会话: ' + (detail.summary ? detail.summary.activeSessions : 0) +
-        (sessionQuery ? (' | 匹配: ' + sessions.length) : '');
-
-      const host = $('detailSessionList');
-      host.innerHTML = '';
-      if (!sessions.length) {
-        host.innerHTML = sessionQuery
-          ? '<div class="empty">没有匹配的会话。</div>'
-          : '<div class="empty">暂无会话，可在左侧创建新会话。</div>';
-        return;
-      }
-
-      for (const [idx, session] of sessions.entries()) {
-        const item = document.createElement('div');
-        item.className = 'session-item';
-        item.style.setProperty('--stagger', String(idx));
-
-        const head = document.createElement('div');
-        head.className = 'session-head';
-
-        const sid = document.createElement('span');
-        sid.className = 'session-id';
-        sid.textContent = session.id;
-
-        const tool = document.createElement('span');
-        tool.className = 'tool-badge';
-        tool.textContent = toolLabel(session.tool);
-
-        head.appendChild(sid);
-        head.appendChild(tool);
-
-        const meta = document.createElement('div');
-        meta.className = 'session-meta';
-
-        const statusBadge = document.createElement('span');
-        const status = String(session.status || 'created');
-        statusBadge.className = 'status-badge status-' + status;
-        statusBadge.textContent = status;
-
-        const created = document.createElement('span');
-        created.textContent = 'created: ' + prettyTime(session.createdAt);
-
-        const path = document.createElement('span');
-        path.textContent = 'path: ' + (session.projectPath || '-');
-
-        meta.appendChild(statusBadge);
-        meta.appendChild(created);
-        meta.appendChild(path);
-
-        const actions = document.createElement('div');
-        actions.className = 'session-actions';
-
-        const btnOpen = document.createElement('button');
-        btnOpen.className = 'secondary';
-        btnOpen.textContent = '进入 Terminal';
-        btnOpen.onclick = () => openSession(session);
-
-        const resumeCommand = buildClaudeResumeCommand(session);
-        if (resumeCommand) {
-          const btnResume = document.createElement('button');
-          btnResume.className = 'secondary';
-          btnResume.textContent = '复制 Resume 命令';
-          btnResume.onclick = () => copyClaudeResumeCommand(session);
-          actions.appendChild(btnResume);
-        }
-
-        const geminiCommand = buildGeminiLaunchCommand(session, runner);
-        if (geminiCommand) {
-          const btnGemini = document.createElement('button');
-          btnGemini.className = 'secondary';
-          btnGemini.textContent = '复制 Gemini 命令';
-          btnGemini.onclick = () => copyGeminiLaunchCommand(session, runner);
-          actions.appendChild(btnGemini);
-        }
-
-        const btnStop = document.createElement('button');
-        btnStop.className = 'secondary';
-        btnStop.textContent = '停止';
-        const runningLike = status === 'running' || status === 'starting' || status === 'stopping';
-        btnStop.disabled = !runningLike;
-        btnStop.onclick = () => stopSession(session.id);
-
-        const btnDelete = document.createElement('button');
-        btnDelete.className = 'danger';
-        btnDelete.textContent = '删除';
-        btnDelete.onclick = () => deleteSession(session.id);
-
-        actions.appendChild(btnOpen);
-        actions.appendChild(btnStop);
-        actions.appendChild(btnDelete);
-
-        item.appendChild(head);
-        item.appendChild(meta);
-        item.appendChild(actions);
-        host.appendChild(item);
-      }
-    }
-
-    async function refreshRunnerDetail(showError = true) {
-      const rid = state.selectedRunnerId;
-      if (!rid) return;
-      try {
-        const detail = await api('GET', '/api/runners/' + encodeURIComponent(rid));
-        state.runnerDetail = detail;
-        renderRunnerDetail();
-      } catch (e) {
-        const msg = String((e && e.data && e.data.error) || (e && e.message) || '加载 runner 详情失败');
-        if (showError) {
-          setEmptyText($('detailSessionList'), msg);
-        }
-        if (e && e.status === 404) {
-          showView('workspace');
-          refreshRunnerList(false).catch(() => {});
-        }
-      }
-    }
-
-    async function openRunnerDetail(runnerId) {
-      state.selectedRunnerId = runnerId;
-      state.sessionSearch = '';
-      $('sessionSearch').value = '';
-      $('createSessionResult').textContent = '';
-      showView('runnerDetail');
-      await refreshRunnerDetail(true);
-    }
-
-    async function createSessionForRunner() {
-      const rid = state.selectedRunnerId;
-      if (!rid) return;
-
-      $('btnCreateSession').disabled = true;
-      $('createSessionResult').textContent = '';
-      try {
-        const tool = $('newSessionTool').value;
-        if (!tool) {
-          throw new Error('当前 runner 没有可用工具');
-        }
-        const projectPath = $('newSessionPath').value.trim();
-        const projectName = $('newSessionProjectName').value.trim();
-        const body = {
-          tool,
-          projectPath: projectPath || undefined,
-          projectName: projectName || undefined,
-        };
-        const data = await api('POST', '/api/runners/' + encodeURIComponent(rid) + '/sessions', body);
-        $('createSessionResult').textContent = '创建成功: sessionId=' + data.sessionId;
-        $('newSessionProjectName').value = '';
-        await refreshRunnerDetail(false);
-      } catch (e) {
-        $('createSessionResult').textContent = String((e && e.data && e.data.error) || (e && e.message) || '创建失败');
-      } finally {
-        $('btnCreateSession').disabled = $('newSessionTool').disabled;
-      }
-    }
-
-    async function stopSession(sessionId) {
-      try {
-        await api('POST', '/api/sessions/' + encodeURIComponent(sessionId) + '/stop', {});
-      } catch (e) {
-        window.alert(String((e && e.data && e.data.error) || (e && e.message) || '停止失败'));
-      }
-      setTimeout(() => refreshRunnerDetail(false).catch(() => {}), 250);
-    }
-
-    async function deleteSession(sessionId) {
-      const ok = window.confirm('确认删除会话 ' + sessionId + ' ? 运行中的会话会强制终止。');
-      if (!ok) return;
-      try {
-        await api('DELETE', '/api/sessions/' + encodeURIComponent(sessionId) + '?force=1');
-        await refreshRunnerDetail(false);
-      } catch (e) {
-        window.alert(String((e && e.data && e.data.error) || (e && e.message) || '删除失败'));
-      }
-    }
-
-    async function deleteRunner(runnerId) {
-      const ok = window.confirm('确认删除 runner ' + runnerId + ' ? 离线 runner 将直接移除；在线 runner 需要 force 删除。');
-      if (!ok) return;
-
-      try {
-        await api('DELETE', '/api/runners/' + encodeURIComponent(runnerId) + '?force=1');
-        $('cleanupResult').textContent = '已删除 runner: ' + runnerId;
-        if (state.selectedRunnerId === runnerId) {
-          state.selectedRunnerId = '';
-          state.runnerDetail = null;
-          showView('workspace');
-        }
-        await refreshRunnerList(false);
-      } catch (e) {
-        const msg = String((e && e.data && e.data.error) || (e && e.message) || '删除失败');
-        window.alert(msg);
-      }
-    }
-
-    function termWsUrl(sessionId) {
-      const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-      return proto + '//' + location.host + '/ws/terminal?sessionId=' + encodeURIComponent(sessionId);
-    }
-
-    function getTermCols() {
-      return termMode === 'xterm' && term ? term.cols : DEFAULT_TERM_COLS;
-    }
-
-    function getTermRows() {
-      return termMode === 'xterm' && term ? term.rows : DEFAULT_TERM_ROWS;
-    }
-
-    function termReset() {
-      pendingTermOutput = '';
-      if (termFlushTimer) {
-        try { if (typeof cancelAnimationFrame === 'function') cancelAnimationFrame(termFlushTimer); } catch {}
-        clearTimeout(termFlushTimer);
-        termFlushTimer = 0;
-      }
-      if (termMode === 'xterm' && term) {
-        term.reset();
-        scheduleCursorRefresh();
-        return;
-      }
-      if (termMode === 'basic' && basicOut) basicOut.textContent = '';
-      updateTermCursorIndicator();
-    }
-
-    function termWrite(text) {
-      queueTermOutput(text);
-    }
-
-    function focusTerminalInput() {
-      if (termMode === 'xterm' && term) {
-        try { term.focus(); } catch {}
-        try {
-          if (term.textarea && typeof term.textarea.focus === 'function') {
-            term.textarea.focus({ preventScroll: true });
-          }
-        } catch {
-          try {
-            if (term.textarea && typeof term.textarea.focus === 'function') term.textarea.focus();
-          } catch {}
-        }
-        return;
-      }
-      const input = document.querySelector('#termHost .basic-in');
-      if (input && typeof input.focus === 'function') {
-        try { input.focus({ preventScroll: true }); } catch {
-          try { input.focus(); } catch {}
-        }
-      }
-    }
-
-    function clearMobileTermRepeat(clearPressed = true) {
-      if (mobileTermRepeatDelayTimer) {
-        clearTimeout(mobileTermRepeatDelayTimer);
-        mobileTermRepeatDelayTimer = 0;
-      }
-      if (mobileTermRepeatIntervalTimer) {
-        clearInterval(mobileTermRepeatIntervalTimer);
-        mobileTermRepeatIntervalTimer = 0;
-      }
-      if (!clearPressed) return;
-      const wrap = $('termMobileKeys');
-      if (!wrap) return;
-      for (const btn of wrap.querySelectorAll('button.pressed')) btn.classList.remove('pressed');
-    }
-
-    function syncMobileModifierPills() {
-      const wrap = $('termMobileKeys');
-      if (!wrap) return;
-      for (const btn of wrap.querySelectorAll('button[data-mod]')) {
-        const mod = String(btn.getAttribute('data-mod') || '').toLowerCase();
-        const active = (mod === 'ctrl' && mobileTermCtrlLock) || (mod === 'alt' && mobileTermAltLock);
-        btn.classList.toggle('mod-active', active);
-        btn.setAttribute('aria-pressed', active ? 'true' : 'false');
-      }
-    }
-
-    function resetMobileModifiers() {
-      if (!mobileTermCtrlLock && !mobileTermAltLock) return;
-      mobileTermCtrlLock = false;
-      mobileTermAltLock = false;
-      syncMobileModifierPills();
-    }
-
-    function toCtrlSequence(char) {
-      const ch = String(char || '');
-      if (ch.length !== 1) return '';
-      const upper = ch.toUpperCase();
-      const code = upper.charCodeAt(0);
-      if (code >= 65 && code <= 90) return String.fromCharCode(code - 64);
-      if (ch === ' ') return '\x00';
-      if (ch === '[') return '\x1b';
-      if (ch === '\\') return '\x1c';
-      if (ch === ']') return '\x1d';
-      if (ch === '^') return '\x1e';
-      if (ch === '_') return '\x1f';
-      return '';
-    }
-
-    function applyMobileModifiers(payload, actionKey = '') {
-      let next = String(payload || '');
-      if (!next) return '';
-      const ctrlOn = mobileTermCtrlLock;
-      const altOn = mobileTermAltLock;
-      const key = String(actionKey || '').toLowerCase();
-
-      if (ctrlOn) {
-        if (next.length === 1) {
-          const ctrlChar = toCtrlSequence(next);
-          if (ctrlChar) next = ctrlChar;
-        } else if (key === 'left') {
-          next = '\x1b[1;5D';
-        } else if (key === 'right') {
-          next = '\x1b[1;5C';
-        } else if (key === 'up') {
-          next = '\x1b[1;5A';
-        } else if (key === 'down') {
-          next = '\x1b[1;5B';
-        } else if (key === 'backspace') {
-          next = '\x17';
-        }
-      }
-
-      if (altOn) next = '\x1b' + next;
-
-      if (ctrlOn || altOn) {
-        mobileTermCtrlLock = false;
-        mobileTermAltLock = false;
-        syncMobileModifierPills();
-      }
-      return next;
-    }
-
-    function sendTermInput(raw) {
-      if (!termWs || termWs.readyState !== 1) return;
-      const bytes = termEncoder.encode(String(raw || ''));
-      if (bytes.length) termWs.send(bytes);
-      focusTerminalInput();
-    }
-
-    function sendCtrlChar(letter) {
-      const upper = String(letter || '').toUpperCase();
-      if (!upper || upper.length !== 1) return;
-      const code = upper.charCodeAt(0);
-      if (code < 65 || code > 90) return;
-      sendTermInput(String.fromCharCode(code - 64));
-    }
-
-    function sendMobileTermAction(actionKey) {
-      const key = String(actionKey || '').toLowerCase();
-      const payload = MOBILE_TERM_ACTIONS[key];
-      if (!payload) return false;
-      sendTermInput(applyMobileModifiers(payload, key));
-      return true;
-    }
-
-    function sendMobileTermKey(action) {
-      const key = String(action || '').toLowerCase();
-      if (!key) return;
-      if (key === 'keyboard') {
-        focusTerminalInput();
-        return;
-      }
-      if (key === 'ctrl') {
-        mobileTermCtrlLock = !mobileTermCtrlLock;
-        syncMobileModifierPills();
-        return;
-      }
-      if (key === 'alt') {
-        mobileTermAltLock = !mobileTermAltLock;
-        syncMobileModifierPills();
-        return;
-      }
-      if (key === 'ctrlc') {
-        sendTermInput(applyMobileModifiers('\x03', key));
-        return;
-      }
-      if (key === 'ctrld') {
-        sendTermInput(applyMobileModifiers('\x04', key));
-        return;
-      }
-      if (sendMobileTermAction(key)) return;
-      if (key.length === 1) {
-        sendTermInput(applyMobileModifiers(key, key));
-        return;
-      }
-      if (key.startsWith('ctrl+') && key.length === 6) {
-        sendCtrlChar(key.slice(5));
-      }
-    }
-
-    function startMobileTermRepeat(target, action) {
-      const key = String(action || '').toLowerCase();
-      if (!key || !MOBILE_TERM_REPEATABLE_KEYS.has(key)) return;
-      clearMobileTermRepeat();
-      target.classList.add('pressed');
-      target.dataset.skipClick = '1';
-      sendMobileTermKey(key);
-      mobileTermRepeatDelayTimer = setTimeout(() => {
-        mobileTermRepeatDelayTimer = 0;
-        mobileTermRepeatIntervalTimer = setInterval(() => {
-          sendMobileTermKey(key);
-        }, MOBILE_TERM_REPEAT_INTERVAL_MS);
-      }, MOBILE_TERM_REPEAT_DELAY_MS);
-    }
-
-    function setupBasicTerminal() {
-      const host = $('termHost');
-      host.innerHTML = '';
-
-      const wrap = document.createElement('div');
-      wrap.className = 'basic-wrap';
-
-      const out = document.createElement('pre');
-      out.className = 'basic-out';
-
-      const input = document.createElement('textarea');
-      input.className = 'basic-in';
-      input.placeholder = 'basic terminal input: 键入、回车、退格、粘贴';
-
-      input.addEventListener('paste', (ev) => {
-        if (!termWs || termWs.readyState !== 1) return;
-        const text = (ev.clipboardData && ev.clipboardData.getData('text')) || '';
-        if (text) {
-          ev.preventDefault();
-          sendTermInput(text);
-        }
-      });
-
-      input.addEventListener('keydown', (ev) => {
-        if (!termWs || termWs.readyState !== 1) return;
-
-        if (ev.key === 'Enter') { ev.preventDefault(); sendTermInput('\r'); return; }
-        if (ev.key === 'Backspace') { ev.preventDefault(); sendTermInput('\x7f'); return; }
-        if (ev.key === 'Tab') { ev.preventDefault(); sendTermInput('\t'); return; }
-        if (ev.key === 'ArrowUp') { ev.preventDefault(); sendTermInput('\x1b[A'); return; }
-        if (ev.key === 'ArrowDown') { ev.preventDefault(); sendTermInput('\x1b[B'); return; }
-        if (ev.key === 'ArrowRight') { ev.preventDefault(); sendTermInput('\x1b[C'); return; }
-        if (ev.key === 'ArrowLeft') { ev.preventDefault(); sendTermInput('\x1b[D'); return; }
-
-        if (ev.ctrlKey && !ev.metaKey && !ev.altKey && ev.key && ev.key.length === 1) {
-          const upper = ev.key.toUpperCase();
-          const code = upper.charCodeAt(0);
-          if (code >= 65 && code <= 90) {
-            ev.preventDefault();
-            sendTermInput(String.fromCharCode(code - 64));
-            return;
-          }
-        }
-
-        if (!ev.ctrlKey && !ev.metaKey && !ev.altKey && ev.key && ev.key.length === 1) {
-          ev.preventDefault();
-          sendTermInput(ev.key);
-        }
-      });
-
-      wrap.appendChild(out);
-      wrap.appendChild(input);
-      host.appendChild(wrap);
-      basicOut = out;
-      termMode = 'basic';
-      updateTermCursorIndicator();
-      syncMobileModifierPills();
-      termWrite('[basic terminal mode enabled]\r\n');
-    }
-
-    function initTerminal() {
-      const host = $('termHost');
-      host.innerHTML = '';
-
-      if (typeof Terminal === 'undefined' || typeof FitAddon === 'undefined' || !FitAddon.FitAddon) {
-        setupBasicTerminal();
-        return;
-      }
-
-      const compact = window.matchMedia && window.matchMedia('(max-width: 780px)').matches;
-      term = new Terminal({
-        cursorBlink: true,
-        cursorStyle: 'block',
-        cursorInactiveStyle: 'outline',
-        fontFamily: '"Geist Mono", "JetBrains Mono", "SFMono-Regular", Menlo, Monaco, Consolas, monospace',
-        fontSize: compact ? 14 : 12,
-        allowTransparency: false,
-        theme: getXtermTheme(currentTheme),
-        scrollback: 5000,
-      });
-      fitAddon = new FitAddon.FitAddon();
-      term.loadAddon(fitAddon);
-      term.open(host);
-      fitAddon.fit();
-      termMode = 'xterm';
-      term.onData((data) => sendTermInput(data));
-      term.onCursorMove(() => scheduleCursorRefresh());
-      host.addEventListener('click', () => {
-        try { term.focus(); } catch {}
-      });
-      host.addEventListener('touchstart', () => {
-        try { term.focus(); } catch {}
-      }, { passive: true });
-      scheduleCursorRefresh();
-      syncMobileModifierPills();
-    }
-
-    function sendResize() {
-      if (termMode === 'xterm' && fitAddon) fitAddon.fit();
-      scheduleCursorRefresh();
-      if (!termWs || termWs.readyState !== 1) return;
-      termWs.send(JSON.stringify({ type: 'resize', cols: getTermCols(), rows: getTermRows() }));
-    }
-
-    function bindResizeHooks() {
-      window.addEventListener('resize', () => scheduleViewportRefresh());
-      window.addEventListener('orientationchange', () => scheduleViewportRefresh());
-      if (window.visualViewport) {
-        window.visualViewport.addEventListener('resize', () => scheduleViewportRefresh());
-        window.visualViewport.addEventListener('scroll', () => scheduleViewportRefresh());
-      }
-      if (typeof ResizeObserver !== 'undefined') {
-        resizeObserver = new ResizeObserver(() => scheduleResizeSync());
-        resizeObserver.observe($('termHost'));
-      }
-    }
-
-    function disconnectTerminal(showHint = true) {
-      clearMobileTermRepeat();
-      if (termWs) {
-        try { termWs.close(); } catch {}
-      }
-      termWs = null;
-      setTermConnection('disconnected');
-      if (showHint) termWrite('\r\n[disconnected]\r\n');
-    }
-
-    async function ensureSessionStarted(session) {
-      const sid = session.id;
-      const status = String(session.status || 'created');
-      if (status === 'running' || status === 'starting') return;
-
-      const started = await api('POST', '/api/sessions/' + encodeURIComponent(sid) + '/start', {
-        cols: getTermCols(),
-        rows: getTermRows(),
-        projectPath: session.projectPath || undefined,
-      });
-      if (started && started.status) session.status = started.status;
-    }
-
-    async function connectTerminal(sessionId) {
-      termReset();
-      setTermConnection('connecting');
-      termWrite('[connecting...]\r\n');
-
-      let token = '';
-      try {
-        const grant = await api('POST', '/api/sessions/' + encodeURIComponent(sessionId) + '/terminal-token', {});
-        token = String(grant && grant.token ? grant.token : '');
-      } catch (e) {
-        setTermConnection('error');
-        termWrite('[terminal token failed: ' + String((e && e.data && e.data.error) || (e && e.message) || 'unknown') + ']\r\n');
-        throw e;
-      }
-
-      if (!token) {
-        setTermConnection('error');
-        termWrite('[terminal token missing]\r\n');
-        return;
-      }
-
-      disconnectTerminal(false);
-      setTermConnection('connecting');
-      termWs = new WebSocket(termWsUrl(sessionId), 'token.' + token);
-      termWs.binaryType = 'arraybuffer';
-
-      termWs.onopen = () => {
-        setTermConnection('connected');
-        termWrite('[connected]\r\n');
-        scheduleResizeSync();
-        if (termMode === 'xterm' && term) term.focus();
-      };
-      termWs.onmessage = (ev) => {
-        if (ev.data instanceof ArrayBuffer) {
-          const text = termDecoder.decode(new Uint8Array(ev.data), { stream: true });
-          if (text) termWrite(text);
-          return;
-        }
-        if (typeof Blob !== 'undefined' && ev.data instanceof Blob) {
-          ev.data.arrayBuffer().then((ab) => {
-            const text = termDecoder.decode(new Uint8Array(ab), { stream: true });
-            if (text) termWrite(text);
-          }).catch(() => {});
-          return;
-        }
-        if (typeof ev.data === 'string') termWrite(ev.data);
-      };
-      termWs.onclose = () => {
-        setTermConnection('disconnected');
-        termWrite('\r\n[disconnected]\r\n');
-      };
-      termWs.onerror = () => {
-        setTermConnection('error');
-        termWrite('\r\n[ws error]\r\n');
-      };
-    }
-
-    function updateTerminalHeader(session) {
-      $('termTitle').textContent = 'Session ' + session.id;
-      $('termMeta').textContent =
-        'runner=' + session.runnerId +
-        ' | tool=' + toolLabel(session.tool) +
-        ' | status=' + String(session.status || 'created');
-    }
-
-    async function openSession(session) {
-      const rid = session.runnerId;
-      const runner = state.runnersAll.find((x) => x.id === rid);
-      if (!runner || !runner.online) {
-        window.alert('当前 runner 离线，无法进入 terminal。');
-        return;
-      }
-
-      state.activeSession = { ...session };
-      state.returnView = 'runnerDetail';
-      showView('terminal');
-      updateTerminalHeader(state.activeSession);
-
-      try {
-        await ensureSessionStarted(state.activeSession);
-      } catch (e) {
-        termReset();
-        termWrite('[start session failed: ' + String((e && e.data && e.data.error) || (e && e.message) || 'unknown') + ']\r\n');
-        return;
-      }
-
-      updateTerminalHeader(state.activeSession);
-      await connectTerminal(state.activeSession.id);
-    }
-
-    async function refreshAuth() {
-      const me = await api('GET', '/api/auth/me');
-      setAuth(me);
-
-      try {
-        const risk = $('riskBanner');
-        const insecureDefault = me && me.security && me.security.defaultPassword;
-        const totpMissing = me && (me.totpEnabled === false || me.totpProvisioned === false);
-        const isRisk = me && me.authenticated && (insecureDefault || totpMissing);
-        risk.textContent = insecureDefault ? '默认账密未修改，存在风险。' : '未配置两步验证，存在风险。';
-        risk.classList.toggle('hidden', !isRisk);
-      } catch {}
-
-      return me;
-    }
-
-    async function refreshSettings() {
-      const s = await api('GET', '/api/admin/settings');
-      const totp = (s && s.web && s.web.totp) ? s.web.totp : {};
-      $('settingsSub').textContent = 'user: ' + (s && s.web && s.web.user ? s.web.user : '-') ;
-
-      const configured = !!(totp && totp.configured);
-      if (configured) {
-        $('totpStatus').textContent = '已配置两步验证。';
-        $('btnTotpDisable').classList.remove('hidden');
-        $('btnTotpEnable').classList.add('hidden');
-      } else {
-        $('totpStatus').textContent = '未配置两步验证：请先访问 /setup 绑定。';
-        $('btnTotpDisable').classList.add('hidden');
-        $('btnTotpEnable').classList.remove('hidden');
-      }
-      return s;
-    }
-
-    async function saveAuthSettings() {
-      $('btnSaveAuth').disabled = true;
-      $('saveAuthResult').textContent = '';
-      try {
-        const oldPassword = $('setOldPassword').value;
-        const newUser = $('setNewUser').value.trim();
-        const newPassword = $('setNewPassword').value;
-        const resp = await api('POST', '/api/admin/auth/change', { oldPassword, newUser, newPassword });
-        $('saveAuthResult').textContent = '已保存，需重新登录。';
-        if (resp && resp.relogin) {
-          await doLogout();
-        }
-      } catch (e) {
-        $('saveAuthResult').textContent = String((e && e.data && e.data.error) || (e && e.message) || '保存失败');
-      } finally {
-        $('btnSaveAuth').disabled = false;
-        try { $('setOldPassword').value = ''; $('setNewPassword').value = ''; } catch {}
-      }
-    }
-
-    async function totpAction(kind) {
-      $('totpActionResult').textContent = '';
-      if (kind === 'disable') {
-        modalShow({
-          title: '删除两步验证',
-          body: '删除两步验证会降低安全性，是否继续？',
-          okText: '继续删除',
-          cancelText: '取消',
-          fields: [
-            { key: 'password', label: '当前密码', placeholder: '必填', type: 'password' },
-            { key: 'totp', label: '当前动态码', placeholder: '6 位动态码', inputmode: 'numeric', autocomplete: 'one-time-code' },
-          ],
-          onOk: async (v) => {
-            const p = String(v.password || '');
-            const c = String(v.totp || '').trim();
-            if (!p) {
-              window.alert('需要输入当前密码');
-              return;
-            }
-            if (!c) {
-              window.alert('需要输入当前动态码');
-              return;
-            }
-            try {
-              await api('POST', '/api/admin/totp/disable', { password: p, totp: c });
-              $('totpActionResult').textContent = '已删除两步验证。';
-              try { await refreshAuth(); } catch {}
-              try { await refreshSettings(); } catch {}
-            } catch (e) {
-              $('totpActionResult').textContent = String((e && e.data && e.data.error) || (e && e.message) || '操作失败');
-            }
-          },
-        });
-        return;
-      }
-
-      if (kind === 'enable') {
-        location.href = '/setup';
-        return;
-      }
-
-      $('totpActionResult').textContent = '操作不支持';
-      return;
-    }
-
-    async function doLogin(ev) {
-      ev.preventDefault();
-      $('btnLogin').disabled = true;
-      $('loginError').textContent = '';
-
-      try {
-        const username = $('authUser').value.trim();
-        const password = $('authPassword').value;
-        const inTotpStep = !$('authTotpField').classList.contains('hidden');
-        const body = inTotpStep
-          ? { username, password, totp: $('authTotp').value.trim() }
-          : { username, password };
-        const resp = await api('POST', '/api/auth/login', body);
-
-        if (resp && resp.needTotp && !resp.authenticated) {
-          setLoginTotpMode(true);
-          $('loginError').textContent = '请输入动态码继续登录';
-          try { $('authTotp').focus(); } catch {}
-          return;
-        }
-        if (!resp || !resp.authenticated) {
-          throw new Error('登录失败');
-        }
-
-        setAuth(resp);
-        setLoginTotpMode(false);
-        showView('workspace');
-        await refreshRunnerList(true);
-      } catch (e) {
-        const msg = String((e && e.data && e.data.error) || (e && e.message) || '登录失败');
-        $('loginError').textContent = msg;
-        if (msg.indexOf('invalid credentials') >= 0) {
-          setLoginTotpMode(false);
-        } else {
-          try { $('authTotp').value = ''; } catch {}
-        }
-        try { window.alert(msg); } catch {}
-      } finally {
-        $('btnLogin').disabled = false;
-      }
-    }
-
-    async function doLogout() {
-      $('btnLogout').disabled = true;
-      try {
-        await api('POST', '/api/auth/logout', {});
-      } catch {}
-      resetAuth();
-      showView('login');
-      $('btnLogout').disabled = false;
-    }
-
-    function bindUiEvents() {
-      const btnThemeToggle = $('btnThemeToggle');
-      if (btnThemeToggle) btnThemeToggle.onclick = () => toggleTheme();
-
-      $('loginForm').addEventListener('submit', doLogin);
-      $('btnLogout').onclick = () => doLogout();
-      $('btnRefreshRunners').onclick = () => refreshRunnerList(true);
-      $('runnerSearch').addEventListener('input', (ev) => {
-        state.runnerSearch = String(ev.target && ev.target.value ? ev.target.value : '');
-        renderRunnerList();
-      });
-      $('sessionSearch').addEventListener('input', (ev) => {
-        state.sessionSearch = String(ev.target && ev.target.value ? ev.target.value : '');
-        renderRunnerDetail();
-      });
-
-      $('btnOpenSettings').onclick = async () => {
-        showView('settings');
-        try { await refreshSettings(); } catch {}
-      };
-      $('btnBackFromSettings').onclick = async () => {
-        showView('workspace');
-        await refreshRunnerList(false);
-      };
-      $('btnSaveAuth').onclick = () => saveAuthSettings();
-      $('btnTotpDisable').onclick = () => totpAction('disable');
-      $('btnTotpEnable').onclick = () => totpAction('enable');
-
-      $('btnBackToRunners').onclick = async () => {
-        showView('workspace');
-        await refreshRunnerList(false);
-      };
-      $('btnRefreshDetail').onclick = () => refreshRunnerDetail(true);
-      $('btnCreateSession').onclick = () => createSessionForRunner();
-
-      $('btnBackFromTerminal').onclick = async () => {
-        showView(state.returnView || 'runnerDetail');
-        if (state.selectedRunnerId) await refreshRunnerDetail(false);
-      };
-      $('btnTermReconnect').onclick = async () => {
-        if (!state.activeSession) return;
-        await connectTerminal(state.activeSession.id);
-      };
-      $('btnTermDisconnect').onclick = () => disconnectTerminal(true);
-
-      const termMobileKeys = $('termMobileKeys');
-      termMobileKeys.addEventListener('click', (ev) => {
-        const target = ev.target instanceof Element ? ev.target.closest('button[data-term-key]') : null;
-        if (!target) return;
-        ev.preventDefault();
-        if (target.dataset.skipClick === '1') {
-          delete target.dataset.skipClick;
-          return;
-        }
-        sendMobileTermKey(target.getAttribute('data-term-key') || '');
-      });
-      termMobileKeys.addEventListener('pointerdown', (ev) => {
-        if (ev.button !== undefined && ev.button !== 0) return;
-        const target = ev.target instanceof Element ? ev.target.closest('button[data-term-key]') : null;
-        if (!target) return;
-        const key = String(target.getAttribute('data-term-key') || '').toLowerCase();
-        if (!MOBILE_TERM_REPEATABLE_KEYS.has(key)) return;
-        ev.preventDefault();
-        startMobileTermRepeat(target, key);
-      });
-      const stopRepeat = () => clearMobileTermRepeat();
-      termMobileKeys.addEventListener('pointerup', stopRepeat);
-      termMobileKeys.addEventListener('pointercancel', stopRepeat);
-      termMobileKeys.addEventListener('pointerleave', stopRepeat);
-      window.addEventListener('pointerup', stopRepeat);
-      window.addEventListener('blur', stopRepeat);
-    }
-
-    async function bootstrap() {
-      initTheme();
-      applyViewportState();
-      setTermConnection('disconnected');
-      updateTermCursorIndicator();
-      initTerminal();
-      bindResizeHooks();
-      bindUiEvents();
-
-      try {
-        const me = await refreshAuth();
-
-        if (me && me.authenticated) {
-          showView('workspace');
-          await refreshRunnerList(true);
-
-          try {
-            const insecureDefault = me.security && me.security.defaultPassword;
-            if (insecureDefault) {
-              const go = window.confirm('检测到默认账密 admin/agentmesh 未修改，存在风险。现在去设置修改吗？');
-              if (go) {
-                showView('settings');
-                await refreshSettings();
-              }
-            }
-          } catch {}
-
-          return;
-        }
-      } catch {}
-
-      resetAuth();
-      showView('login');
-    }
-
-    bootstrap();
-  </script>
+  <script type="module" src="/assets/ui/app.js"></script>
 </body>
 </html>

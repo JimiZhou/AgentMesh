@@ -1044,37 +1044,69 @@ app.get('/setup', async (req, reply) => {
     const html = `<!doctype html>
   <html lang="zh-CN"><head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title>AgentMesh Setup</title>
     <style>
-      body{font-family:ui-sans-serif,system-ui,-apple-system,"PingFang SC","Segoe UI",sans-serif;background:#f6f7f9;margin:0;min-height:100vh;display:grid;place-items:center;color:#0f172a}
-      .card{width:min(640px,96vw);background:#fff;border:1px solid rgba(15,23,42,.10);border-radius:18px;box-shadow:0 18px 50px rgba(15,23,42,.08);padding:28px}
-      h1{margin:0 0 8px 0;font-size:22px;letter-spacing:-.4px}
-      p{margin:0 0 16px 0;color:rgba(15,23,42,.55);line-height:1.5}
-      img{max-width:280px;width:100%;height:auto;border-radius:14px;border:1px solid rgba(15,23,42,.10);background:#fff}
-      .row{display:flex;gap:18px;flex-wrap:wrap;align-items:center}
-      .meta{font-size:12px;color:rgba(15,23,42,.60)}
-      input{width:100%;padding:12px 14px;border-radius:14px;border:1px solid rgba(15,23,42,.10);background:rgba(15,23,42,.03);outline:none}
-      button{margin-top:10px;padding:12px 16px;border-radius:14px;border:1px solid transparent;background:rgba(15,23,42,.92);color:#fff;font-weight:700;cursor:pointer}
-      button.secondary{background:rgba(15,23,42,.03);border-color:rgba(15,23,42,.10);color:#0f172a}
-      .err{color:#b91c1c;font-size:13px;min-height:18px;margin-top:8px}
+      :root{
+        --bg:#0c1117;
+        --bg-soft:#151b25;
+        --panel:rgba(15,20,30,.92);
+        --panel-soft:rgba(255,255,255,.04);
+        --border:rgba(255,255,255,.10);
+        --text:#eff3f8;
+        --muted:#9aa8b7;
+        --accent:#ff8958;
+        --accent-strong:#ff6b2c;
+        --danger:#ff8680;
+      }
+      *{box-sizing:border-box}
+      body{font-family:"Sora","Avenir Next","PingFang SC","Segoe UI",sans-serif;background:radial-gradient(circle at 10% 10%, rgba(255,137,88,.16), transparent 24%),radial-gradient(circle at 85% 14%, rgba(99,102,241,.12), transparent 20%),linear-gradient(180deg, #0a0d12, #0c1117);margin:0;min-height:100vh;color:var(--text)}
+      body::before{content:"";position:fixed;inset:0;background-image:linear-gradient(rgba(255,255,255,.04) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.04) 1px,transparent 1px);background-size:42px 42px;mask-image:linear-gradient(180deg, rgba(0,0,0,.85), transparent 82%);pointer-events:none}
+      .shell{position:relative;z-index:1;min-height:100vh;display:grid;place-items:center;padding:24px 16px}
+      .card{width:min(980px,100%);background:var(--panel);border:1px solid var(--border);border-radius:30px;box-shadow:0 26px 70px rgba(0,0,0,.35);padding:24px;backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px)}
+      .eyebrow{display:inline-flex;padding:6px 10px;border-radius:999px;border:1px solid var(--border);background:var(--panel-soft);color:var(--muted);font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase}
+      h1{margin:10px 0 8px 0;font-size:clamp(30px,4vw,48px);line-height:.94;letter-spacing:-.05em}
+      p{margin:0;color:var(--muted);line-height:1.65}
+      .grid{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(300px,380px);gap:20px;margin-top:22px}
+      .panel{border:1px solid var(--border);border-radius:24px;background:rgba(255,255,255,.03);padding:18px}
+      .meta{font-size:12px;color:var(--muted);margin-bottom:10px}
+      .hint{margin-top:14px;padding:14px;border-radius:18px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.03);display:grid;gap:6px}
+      .hint strong{font-size:13px}
+      img{max-width:320px;width:100%;height:auto;border-radius:20px;border:1px solid var(--border);background:#fff}
+      label{display:grid;gap:8px;font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
+      input{width:100%;min-height:48px;padding:12px 14px;border-radius:16px;border:1px solid var(--border);background:rgba(255,255,255,.05);color:var(--text);outline:none}
+      input:focus{border-color:rgba(255,137,88,.54);box-shadow:0 0 0 4px rgba(255,137,88,.14)}
+      .actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
+      button,.link-btn{padding:12px 16px;border-radius:16px;border:1px solid transparent;background:linear-gradient(135deg,var(--accent),var(--accent-strong));color:#fff8f4;font-weight:700;cursor:pointer;text-decoration:none}
+      .link-btn{display:inline-flex;align-items:center;justify-content:center;background:rgba(255,255,255,.04);border-color:var(--border);color:var(--text)}
+      .err{color:var(--danger);font-size:13px;min-height:18px;margin-top:10px}
+      @media (max-width:820px){.card{padding:18px}.grid{grid-template-columns:1fr}}
     </style>
   </head><body>
-    <div class="card">
-      <h1>初始化两步验证</h1>
-      <p>用 Google Authenticator 扫码后，输入当前 6 位动态码确认。确认成功后将永久锁定初始化入口。</p>
-      <div class="row">
-        <div>
-          <div class="meta">issuer: ${issuer} · account: ${account}</div>
-          <img src="/setup/qr" alt="TOTP QR" />
-        </div>
-        <div style="flex:1;min-width:260px">
-          <div class="meta" style="margin-bottom:6px">6 位动态码</div>
-          <input id="code" inputmode="numeric" autocomplete="one-time-code" placeholder="123456" />
-          <button id="btn">确认并锁定</button>
-          <div class="err" id="err"></div>
-          <div style="margin-top:10px">
-            <a href="/" style="text-decoration:none"><button class="secondary" type="button">返回登录</button></a>
+    <div class="shell">
+      <div class="card">
+        <span class="eyebrow">Security Setup</span>
+        <h1>初始化两步验证</h1>
+        <p>用认证器扫码后，输入当前 6 位动态码确认。成功后会锁定初始化入口，后续只能在设置页里重置或删除。</p>
+        <div class="grid">
+          <div class="panel">
+            <div class="meta">issuer: ${issuer} · account: ${account}</div>
+            <img src="/setup/qr" alt="TOTP QR" />
+            <div class="hint">
+              <strong>上线建议</strong>
+              <span>完成绑定后再暴露控制台，避免在仅凭密码的状态下对外开放。</span>
+            </div>
+          </div>
+          <div class="panel">
+            <label>
+              6 位动态码
+              <input id="code" inputmode="numeric" autocomplete="one-time-code" placeholder="123456" />
+            </label>
+            <div class="actions">
+              <button id="btn">确认并锁定</button>
+              <a href="/" class="link-btn">返回控制台</a>
+            </div>
+            <div class="err" id="err"></div>
           </div>
         </div>
       </div>
@@ -1972,7 +2004,7 @@ app.post('/api/sessions/:id/start', async (req, reply) => {
         rows,
         ts: Date.now(),
     };
-    app.log.info({ runnerId: session.runnerId, sessionId, tool: session.tool, projectPath }, 'start_session send');
+    app.log.debug({ runnerId: session.runnerId, sessionId, tool: session.tool, projectPath }, 'start_session send');
     try {
         conn.send(JSON.stringify(cmd));
     }

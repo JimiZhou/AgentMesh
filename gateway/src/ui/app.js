@@ -2,9 +2,527 @@ import { createTerminalController } from './terminal.js';
 
 const $ = (id) => document.getElementById(id);
 const THEME_STORAGE_KEY = 'agentmesh_ui_theme';
+const LANG_STORAGE_KEY = 'agentmesh_ui_lang';
+const TERM_PALETTE_STORAGE_KEY = 'agentmesh_terminal_palette';
 const THEME_LIGHT = 'light';
 const THEME_DARK = 'dark';
+const LANG_ZH = 'zh';
+const LANG_EN = 'en';
+const TERM_PALETTE_NOIR = 'noir';
+const TERM_PALETTE_DRACULA = 'dracula';
+const TERM_PALETTE_GRUVBOX = 'gruvbox';
+const TERM_PALETTE_NORD = 'nord';
+const TERM_PALETTE_TOKYO_NIGHT = 'tokyo-night';
+const TERM_PALETTE_SOLARIZED_DARK = 'solarized-dark';
+const TERM_PALETTE_SOLARIZED_LIGHT = 'solarized-light';
+const TERM_PALETTE_PAPER = 'paper';
+const TERM_PALETTE_AMBER = 'amber';
+const TERM_PALETTES = [
+  TERM_PALETTE_NOIR,
+  TERM_PALETTE_DRACULA,
+  TERM_PALETTE_GRUVBOX,
+  TERM_PALETTE_NORD,
+  TERM_PALETTE_TOKYO_NIGHT,
+  TERM_PALETTE_SOLARIZED_DARK,
+  TERM_PALETTE_SOLARIZED_LIGHT,
+  TERM_PALETTE_PAPER,
+  TERM_PALETTE_AMBER,
+];
+const TERMINAL_PALETTE_PRESETS = [
+  { id: TERM_PALETTE_NOIR, labelKey: 'terminal.paletteNoir', background: '#040609', foreground: '#f4f7fa', accent: '#94a3b8' },
+  { id: TERM_PALETTE_DRACULA, labelKey: 'terminal.paletteDracula', background: '#191a21', foreground: '#f8f8f2', accent: '#bd93f9' },
+  { id: TERM_PALETTE_GRUVBOX, labelKey: 'terminal.paletteGruvbox', background: '#1d2021', foreground: '#ebdbb2', accent: '#fabd2f' },
+  { id: TERM_PALETTE_NORD, labelKey: 'terminal.paletteNord', background: '#2e3440', foreground: '#e5e9f0', accent: '#88c0d0' },
+  { id: TERM_PALETTE_TOKYO_NIGHT, labelKey: 'terminal.paletteTokyoNight', background: '#1a1b26', foreground: '#c0caf5', accent: '#7aa2f7' },
+  { id: TERM_PALETTE_SOLARIZED_DARK, labelKey: 'terminal.paletteSolarizedDark', background: '#002b36', foreground: '#93a1a1', accent: '#268bd2' },
+  { id: TERM_PALETTE_SOLARIZED_LIGHT, labelKey: 'terminal.paletteSolarizedLight', background: '#fdf6e3', foreground: '#586e75', accent: '#268bd2' },
+  { id: TERM_PALETTE_PAPER, labelKey: 'terminal.palettePaper', background: '#f7f3ea', foreground: '#111111', accent: '#6b7280' },
+  { id: TERM_PALETTE_AMBER, labelKey: 'terminal.paletteAmber', background: '#0a0907', foreground: '#f3c776', accent: '#f3c776' },
+];
 const TOOL_ORDER = ['codex', 'claude', 'gemini'];
+
+const MESSAGES = {
+  zh: {
+    'app.description': 'AgentMesh 控制台，用于连接远端网关、管理本地节点，并在浏览器中安全使用 Codex、Claude 和 Gemini CLI。',
+    'chrome.tagline': '远端节点控制台，用于管理 Codex、Claude 和 Gemini CLI',
+    'chrome.language': '界面语言',
+    'auth.signedOut': '未登录',
+    'auth.signedIn': ({ user }) => `已登录 · ${user || '-'}`,
+    'login.eyebrow': '网关在线',
+    'login.title': 'AgentMesh',
+    'login.copy': '使用本机网关账号登录，统一管理节点、会话和终端连接。',
+    'login.footnote': '如已启用 TOTP，下一步会要求输入 6 位动态码。',
+    'field.username': '用户名',
+    'field.password': '密码',
+    'field.totp': '动态码',
+    'placeholder.username': '输入用户名',
+    'placeholder.password': '输入网关密码',
+    'placeholder.totp': '输入 6 位动态码',
+    'placeholder.newUser': '留空表示不修改',
+    'placeholder.newPassword': '留空表示不修改',
+    'placeholder.currentPassword': '用于确认身份',
+    'placeholder.runnerSearch': '例如 mac-mini / codex / 在线',
+    'placeholder.projectPath': '留空时使用节点默认工作目录',
+    'placeholder.projectName': '例如 my-workspace',
+    'placeholder.sessionSearch': '按会话 ID、工具、状态或路径搜索',
+    'button.login': '登录',
+    'button.verifyAndLogin': '验证并登录',
+    'button.settings': '设置',
+    'button.refresh': '刷新',
+    'button.logout': '退出',
+    'button.notifications': '通知',
+    'button.reviewNow': '立即处理',
+    'button.backToConsole': '返回控制台',
+    'button.saveAndRelogin': '保存并重新登录',
+    'button.configureTotp': '前往绑定',
+    'button.removeTotp': '删除两步验证',
+    'button.backToList': '返回列表',
+    'button.refreshDetail': '刷新详情',
+    'button.createAndOpenTerminal': '创建并进入终端',
+    'button.back': '返回',
+    'button.reconnect': '重连',
+    'button.disconnect': '断开',
+    'button.confirm': '确认',
+    'button.cancel': '取消',
+    'button.viewDetails': '查看详情',
+    'button.delete': '删除',
+    'button.openTerminal': '进入终端',
+    'button.copyClaudeResume': '复制 Claude Resume 命令',
+    'button.copyGeminiLaunch': '复制 Gemini 启动命令',
+    'button.stop': '停止',
+    'button.zoomIn': '放大',
+    'button.zoomOut': '缩小',
+    'workspace.eyebrow': '控制台',
+    'workspace.title': '控制台',
+    'workspace.riskTitle': '安全提醒',
+    'workspace.runnerListTitle': '节点列表',
+    'workspace.runnerListCopy': '当前网关可见的所有节点，按在线状态和最近心跳排序。',
+    'stats.onlineRunners': '在线节点',
+    'stats.onlineRunnersMeta': '当前可接收任务的节点',
+    'stats.offlineRunners': '离线节点',
+    'stats.offlineRunnersMeta': '需要排查网络、服务或机器状态的节点',
+    'stats.totalSessions': '总会话数',
+    'stats.totalSessionsMeta': '当前网关可见的所有会话',
+    'stats.activeSessions': '活跃会话',
+    'stats.activeSessionsMeta': '运行中 / 启动中 / 停止中',
+    'settings.eyebrow': '安全设置',
+    'settings.title': '控制台设置',
+    'settings.authTitle': '账号与密码',
+    'settings.authCopy': '修改控制台登录身份。保存后当前会话会被强制登出。',
+    'settings.newUser': '新用户名',
+    'settings.newPassword': '新密码',
+    'settings.currentPassword': '当前密码',
+    'settings.totpTitle': '两步验证',
+    'settings.totpCopy': '建议在对外暴露控制台之前完成 TOTP 绑定。',
+    'detail.eyebrow': '节点详情',
+    'detail.capabilitiesTitle': '节点能力',
+    'detail.rawCapabilities': '查看原始能力载荷',
+    'detail.newSessionTitle': '新建会话',
+    'detail.newSessionCopy': '为当前节点选择已探测可用的 CLI 工具、项目路径和项目名称，然后直接进入终端。',
+    'detail.cliAgent': 'CLI 工具',
+    'detail.projectPath': '项目路径',
+    'detail.projectPathDefault': '默认工作目录',
+    'detail.projectName': '项目名称',
+    'detail.sessionListTitle': '会话列表',
+    'detail.sessionSearchLabel': '筛选会话',
+    'terminal.eyebrow': '终端',
+    'terminal.disconnected': '未连接',
+    'terminal.hint': '移动端支持 Ctrl / Alt 锁定键、方向键长按连发、双指缩放，以及快速唤起软键盘。',
+    'terminal.mobileKeys': '终端快捷键',
+    'terminal.modifierGroup': '修饰键',
+    'terminal.navigationGroup': '导航键',
+    'terminal.sessionActionsGroup': '会话操作',
+    'terminal.keyboard': '键盘',
+    'terminal.zoomInAria': '放大终端文字',
+    'terminal.zoomOutAria': '缩小终端文字',
+    'terminal.themeButton': '主题',
+    'terminal.paletteGroup': '终端配色选择',
+    'terminal.paletteNoir': 'Noir',
+    'terminal.paletteDracula': 'Dracula',
+    'terminal.paletteGruvbox': 'Gruvbox',
+    'terminal.paletteNord': 'Nord',
+    'terminal.paletteTokyoNight': 'Tokyo Night',
+    'terminal.paletteSolarizedDark': 'Solarized Dark',
+    'terminal.paletteSolarizedLight': 'Solarized Light',
+    'terminal.palettePaper': 'Paper',
+    'terminal.paletteAmber': 'Amber',
+    'modal.title': '提示',
+    'theme.toLight': '切换日间',
+    'theme.toLightAria': '切换到日间模式',
+    'theme.toDark': '切换夜间',
+    'theme.toDarkAria': '切换到夜间模式',
+    'chrome.openMenu': '打开菜单',
+    'chrome.closeMenu': '收起菜单',
+    'notifications.title': '通知',
+    'notifications.empty': '当前没有需要处理的通知。',
+    'notifications.openAria': '打开通知面板',
+    'toast.notice': '提示',
+    'label.unknown': '未知',
+    'label.unreported': '未上报',
+    'status.online': '在线',
+    'status.offline': '离线',
+    'status.created': '已创建',
+    'status.starting': '启动中',
+    'status.running': '运行中',
+    'status.stopping': '停止中',
+    'status.ended': '已结束',
+    'status.exited': '已退出',
+    'status.error': '异常',
+    'runner.summary': ({ online, offline, total, matched }) =>
+      `在线 ${online} 台节点 · 离线 ${offline} 台节点 · 总计 ${total} 台${matched === undefined ? '' : ` · 匹配 ${matched} 台`}`,
+    'runner.emptyMatched': '没有匹配的节点。',
+    'runner.empty': '当前没有节点。',
+    'runner.unsupportedTools': '未上报工具',
+    'runner.lastSeen': '最近心跳',
+    'runner.absoluteTime': '绝对时间',
+    'session.noSupportedTool': '当前节点未上报可用工具，暂不可创建会话。',
+    'detail.subline': ({ status, relative, absolute }) => `${status} · 最近心跳 ${relative} · ${absolute}`,
+    'detail.capabilitySummary': ({ tools }) => `当前节点支持 ${tools}，可直接用于新建会话。`,
+    'detail.capabilitySummaryEmpty': '当前节点未上报可用工具。',
+    'detail.tmuxAvailable': '可用',
+    'detail.tmuxMissing': '缺失',
+    'detail.sessionSummary': ({ total, active, matched }) =>
+      `总会话 ${total} · 活跃 ${active}${matched === undefined ? '' : ` · 匹配 ${matched}`}`,
+    'detail.noSessionMatched': '没有匹配的会话。',
+    'detail.noSession': '暂无会话，可直接在上方创建。',
+    'detail.metric.runnerId': '节点 ID',
+    'detail.metric.platform': '平台',
+    'detail.metric.status': '在线状态',
+    'detail.metric.lastHeartbeat': '最近心跳',
+    'detail.metric.activeSessions': '活跃会话',
+    'detail.metric.totalSessions': '总会话',
+    'detail.metric.tmux': 'tmux',
+    'detail.metric.queueBytes': '队列字节',
+    'detail.metric.queueFrames': '队列帧',
+    'session.idLabel': '会话 ID',
+    'session.meta.created': '创建时间',
+    'session.meta.projectPath': '项目路径',
+    'session.meta.runner': '节点',
+    'session.createdByUnknown': '未知用户',
+    'terminal.meta': ({ tool, sessionId, runner, status, connection, projectPath }) =>
+      `${tool} 会话 ID: ${sessionId} · 节点: ${runner} · 状态: ${status}${connection ? ` · ${connection}` : ''}${projectPath ? ` · 路径: ${projectPath}` : ''}`,
+    'terminal.connectionFailed': '终端连接失败',
+    'terminal.startFailedInline': ({ message }) => `[启动会话失败: ${message}]`,
+    'terminal.tokenFailedInline': ({ message }) => `[终端令牌获取失败: ${message}]`,
+    'terminal.tokenMissingInline': '[终端令牌缺失]',
+    'terminal.connectingInline': '[连接中...]',
+    'terminal.connectedInline': '[已连接]',
+    'terminal.disconnectedInline': '[已断开]',
+    'terminal.wsErrorInline': '[WebSocket 异常]',
+    'terminal.basicModeInline': '[已启用基础终端模式]',
+    'terminal.basicInputPlaceholder': '基础终端输入：支持键入、回车、退格和粘贴',
+    'terminal.status.connected': '已连接',
+    'terminal.status.connecting': '连接中',
+    'terminal.status.disconnected': '未连接',
+    'terminal.status.error': '连接异常',
+    'notify.loginSuccessTitle': '登录成功',
+    'notify.loginSuccessMessage': ({ user }) => `欢迎回来，${user}。`,
+    'notify.loginFailedTitle': '登录失败',
+    'notify.loginTotpRequired': '请输入动态码继续登录',
+    'notify.loginUnknown': '登录失败',
+    'notify.refreshRunnerFailedTitle': '刷新节点失败',
+    'notify.refreshRunnerDetailFailedTitle': '读取节点详情失败',
+    'notify.refreshFailed': '刷新失败',
+    'notify.loadRunnerFailed': '加载节点详情失败',
+    'notify.createSessionTitle': '会话已创建',
+    'notify.createSessionMessage': ({ sessionId }) => `会话 ID: ${sessionId}，正在准备终端。`,
+    'notify.createSessionInline': ({ sessionId }) => `已创建会话：${sessionId}，正在进入终端…`,
+    'notify.createSessionFailedTitle': '创建会话失败',
+    'notify.createFailed': '创建失败',
+    'notify.runnerOfflineTitle': '节点已离线',
+    'notify.runnerOfflineMessage': '当前节点离线，无法进入终端。',
+    'notify.startSessionFailedTitle': '启动会话失败',
+    'notify.stopRequestedTitle': '停止请求已发送',
+    'notify.stopRequestedMessage': ({ sessionId }) => `会话 ${sessionId} 正在停止。`,
+    'notify.stopFailedTitle': '停止失败',
+    'notify.deleteSessionTitle': '删除会话',
+    'notify.deleteSessionBody': '删除会话会一并清理关联项目；若会话仍在运行，将执行 force 删除。',
+    'notify.deleteSessionConfirm': '确认删除',
+    'notify.deleteSessionSuccessTitle': '会话已删除',
+    'notify.deleteSessionFailedTitle': '删除会话失败',
+    'notify.deleteRunnerTitle': '删除节点',
+    'notify.deleteRunnerBody': '离线节点会直接移除，在线节点会使用 force 删除并清理其会话与项目。',
+    'notify.deleteRunnerSuccessInline': ({ runnerId }) => `已删除节点：${runnerId}`,
+    'notify.deleteRunnerSuccessTitle': '节点已删除',
+    'notify.deleteRunnerFailedTitle': '删除节点失败',
+    'notify.copyClaudeTitle': '已复制 Claude Resume 命令',
+    'notify.copyGeminiTitle': '已复制 Gemini 启动命令',
+    'notify.copyFailedTitle': '复制失败',
+    'notify.settingsCurrentUser': ({ user }) => `当前用户：${user}`,
+    'notify.totpConfigured': '已配置两步验证。若需更换设备，请先删除再重新绑定。',
+    'notify.totpNotConfigured': '未配置两步验证。建议上线前立刻访问 /setup 完成绑定。',
+    'notify.authSavedInline': '已保存，正在退出当前会话。',
+    'notify.authSavedTitle': '账号信息已保存',
+    'notify.authSavedMessage': '需要重新登录后继续。',
+    'notify.saveFailedTitle': '保存失败',
+    'notify.disableTotpTitle': '删除两步验证',
+    'notify.disableTotpBody': '删除后会降低控制台安全性。请再次输入密码和当前动态码确认。',
+    'notify.disableTotpConfirm': '继续删除',
+    'notify.totpPasswordLabel': '当前密码',
+    'notify.totpPasswordPlaceholder': '必填',
+    'notify.totpCodeLabel': '当前动态码',
+    'notify.totpCodePlaceholder': '6 位动态码',
+    'notify.incompleteTitle': '信息不完整',
+    'notify.incompleteMessage': '需要同时提供当前密码和动态码。',
+    'notify.totpDeletedInline': '已删除两步验证。',
+    'notify.totpDeletedTitle': '两步验证已删除',
+    'notify.totpDeletedMessage': '如需上线，请尽快重新绑定。',
+    'notify.disableTotpFailedTitle': '删除两步验证失败',
+    'notify.actionUnsupported': '操作不支持',
+    'risk.defaultTitle': '默认凭据仍在使用',
+    'risk.defaultBody': '检测到 admin / agentmesh 尚未替换。发布前应先修改账号或密码，再继续暴露控制台。',
+    'risk.defaultAction': '去修改账号密码',
+    'risk.totpTitle': '两步验证尚未完成',
+    'risk.totpBody': '当前账户还没有完成 TOTP 绑定。建议上线前立即完成 /setup。',
+    'risk.totpAction': '去绑定 TOTP',
+    'gemini.availableFallback': ({ command }) => `Gemini 可用：将使用 npx fallback 启动（${command}）。`,
+    'gemini.availableEnv': ({ command }) => `Gemini 可用：已通过 AGENTMESH_GEMINI_CMD 指定命令（${command}）。`,
+    'gemini.availableDirect': ({ command }) => `Gemini 可用：命令 ${command}。`,
+    'gemini.unavailable': ({ reason }) => `Gemini 不可用：${reason}。可安装 Gemini CLI 或设置 AGENTMESH_GEMINI_CMD。`,
+    'time.unknown': '-',
+    'theme.toggleFallback': '切换主题',
+  },
+  en: {
+    'app.description': 'AgentMesh console for managing the gateway, local runners, and browser terminals for Codex, Claude, and Gemini CLI.',
+    'chrome.tagline': 'Remote runner control for Codex, Claude, and Gemini CLI',
+    'chrome.language': 'Interface language',
+    'auth.signedOut': 'Not signed in',
+    'auth.signedIn': ({ user }) => `Signed in · ${user || '-'}`,
+    'login.eyebrow': 'Gateway online',
+    'login.title': 'AgentMesh',
+    'login.copy': 'Sign in with the local gateway account to manage runners, sessions, and terminals from one console.',
+    'login.footnote': 'If TOTP is enabled, the next step will ask for a 6-digit code.',
+    'field.username': 'Username',
+    'field.password': 'Password',
+    'field.totp': 'Verification code',
+    'placeholder.username': 'Enter username',
+    'placeholder.password': 'Enter gateway password',
+    'placeholder.totp': 'Enter 6-digit code',
+    'placeholder.newUser': 'Leave blank to keep current',
+    'placeholder.newPassword': 'Leave blank to keep current',
+    'placeholder.currentPassword': 'Required for confirmation',
+    'placeholder.runnerSearch': 'Search by mac-mini / codex / online',
+    'placeholder.projectPath': 'Leave blank to use the runner default working directory',
+    'placeholder.projectName': 'For example: my-workspace',
+    'placeholder.sessionSearch': 'Search by Session ID, tool, status, or path',
+    'button.login': 'Sign in',
+    'button.verifyAndLogin': 'Verify and sign in',
+    'button.settings': 'Settings',
+    'button.refresh': 'Refresh',
+    'button.logout': 'Sign out',
+    'button.notifications': 'Alerts',
+    'button.reviewNow': 'Review now',
+    'button.backToConsole': 'Back to console',
+    'button.saveAndRelogin': 'Save and sign in again',
+    'button.configureTotp': 'Configure TOTP',
+    'button.removeTotp': 'Remove TOTP',
+    'button.backToList': 'Back to list',
+    'button.refreshDetail': 'Refresh details',
+    'button.createAndOpenTerminal': 'Create and open terminal',
+    'button.back': 'Back',
+    'button.reconnect': 'Reconnect',
+    'button.disconnect': 'Disconnect',
+    'button.confirm': 'Confirm',
+    'button.cancel': 'Cancel',
+    'button.viewDetails': 'View details',
+    'button.delete': 'Delete',
+    'button.openTerminal': 'Open terminal',
+    'button.copyClaudeResume': 'Copy Claude resume command',
+    'button.copyGeminiLaunch': 'Copy Gemini launch command',
+    'button.stop': 'Stop',
+    'button.zoomIn': 'Zoom In',
+    'button.zoomOut': 'Zoom Out',
+    'workspace.eyebrow': 'Console',
+    'workspace.title': 'Console',
+    'workspace.riskTitle': 'Security notice',
+    'workspace.runnerListTitle': 'Runner list',
+    'workspace.runnerListCopy': 'All runners visible to this gateway, sorted by connectivity and latest heartbeat.',
+    'stats.onlineRunners': 'Online runners',
+    'stats.onlineRunnersMeta': 'Nodes ready to receive work now',
+    'stats.offlineRunners': 'Offline runners',
+    'stats.offlineRunnersMeta': 'Hosts that need network or service checks',
+    'stats.totalSessions': 'Total sessions',
+    'stats.totalSessionsMeta': 'All sessions visible to this gateway',
+    'stats.activeSessions': 'Active sessions',
+    'stats.activeSessionsMeta': 'running / starting / stopping',
+    'settings.eyebrow': 'Security',
+    'settings.title': 'Console settings',
+    'settings.authTitle': 'Username and password',
+    'settings.authCopy': 'Update the console credentials. Saving will force the current session to sign out.',
+    'settings.newUser': 'New username',
+    'settings.newPassword': 'New password',
+    'settings.currentPassword': 'Current password',
+    'settings.totpTitle': 'Two-factor authentication',
+    'settings.totpCopy': 'TOTP should be configured before exposing this console to other users or networks.',
+    'detail.eyebrow': 'Runner Detail',
+    'detail.capabilitiesTitle': 'Runner capabilities',
+    'detail.rawCapabilities': 'Show raw capability payload',
+    'detail.newSessionTitle': 'Create session',
+    'detail.newSessionCopy': 'Choose a detected CLI agent, a valid project path, and a project name for this runner, then open the terminal immediately.',
+    'detail.cliAgent': 'CLI agent',
+    'detail.projectPath': 'Project path',
+    'detail.projectPathDefault': 'Default working directory',
+    'detail.projectName': 'Project name',
+    'detail.sessionListTitle': 'Session list',
+    'detail.sessionSearchLabel': 'Filter sessions',
+    'terminal.eyebrow': 'Terminal',
+    'terminal.disconnected': 'Disconnected',
+    'terminal.hint': 'Mobile mode supports sticky Ctrl / Alt modifiers, repeating arrow keys, pinch-to-zoom, and quick keyboard focus.',
+    'terminal.mobileKeys': 'Terminal shortcut keys',
+    'terminal.modifierGroup': 'Modifier keys',
+    'terminal.navigationGroup': 'Navigation keys',
+    'terminal.sessionActionsGroup': 'Session actions',
+    'terminal.keyboard': 'Keyboard',
+    'terminal.zoomInAria': 'Increase terminal text size',
+    'terminal.zoomOutAria': 'Decrease terminal text size',
+    'terminal.themeButton': 'Theme',
+    'terminal.paletteGroup': 'Terminal palette selector',
+    'terminal.paletteNoir': 'Noir',
+    'terminal.paletteDracula': 'Dracula',
+    'terminal.paletteGruvbox': 'Gruvbox',
+    'terminal.paletteNord': 'Nord',
+    'terminal.paletteTokyoNight': 'Tokyo Night',
+    'terminal.paletteSolarizedDark': 'Solarized Dark',
+    'terminal.paletteSolarizedLight': 'Solarized Light',
+    'terminal.palettePaper': 'Paper',
+    'terminal.paletteAmber': 'Amber',
+    'modal.title': 'Notice',
+    'theme.toLight': 'Light mode',
+    'theme.toLightAria': 'Switch to light mode',
+    'theme.toDark': 'Dark mode',
+    'theme.toDarkAria': 'Switch to dark mode',
+    'chrome.openMenu': 'Open menu',
+    'chrome.closeMenu': 'Close menu',
+    'notifications.title': 'Notifications',
+    'notifications.empty': 'No notifications right now.',
+    'notifications.openAria': 'Open notifications panel',
+    'toast.notice': 'Notice',
+    'label.unknown': 'Unknown',
+    'label.unreported': 'Unreported',
+    'status.online': 'Online',
+    'status.offline': 'Offline',
+    'status.created': 'Created',
+    'status.starting': 'Starting',
+    'status.running': 'Running',
+    'status.stopping': 'Stopping',
+    'status.ended': 'Ended',
+    'status.exited': 'Exited',
+    'status.error': 'Error',
+    'runner.summary': ({ online, offline, total, matched }) =>
+      `Online ${online} · Offline ${offline} · Total ${total}${matched === undefined ? '' : ` · Matched ${matched}`}`,
+    'runner.emptyMatched': 'No runners match the current filter.',
+    'runner.empty': 'No runners are currently registered.',
+    'runner.unsupportedTools': 'No tools reported',
+    'runner.lastSeen': 'Last seen',
+    'runner.absoluteTime': 'Absolute time',
+    'session.noSupportedTool': 'This runner did not report any supported tools, so sessions cannot be created yet.',
+    'detail.subline': ({ status, relative, absolute }) => `${status} · Last heartbeat ${relative} · ${absolute}`,
+    'detail.capabilitySummary': ({ tools }) => `This runner supports ${tools} and can be used to create new sessions immediately.`,
+    'detail.capabilitySummaryEmpty': 'This runner has not reported any supported tools.',
+    'detail.tmuxAvailable': 'Available',
+    'detail.tmuxMissing': 'Missing',
+    'detail.sessionSummary': ({ total, active, matched }) =>
+      `Total ${total} · Active ${active}${matched === undefined ? '' : ` · Matched ${matched}`}`,
+    'detail.noSessionMatched': 'No sessions match the current filter.',
+    'detail.noSession': 'No sessions yet. Create one above to get started.',
+    'detail.metric.runnerId': 'Runner ID',
+    'detail.metric.platform': 'Platform',
+    'detail.metric.status': 'Connectivity',
+    'detail.metric.lastHeartbeat': 'Last heartbeat',
+    'detail.metric.activeSessions': 'Active sessions',
+    'detail.metric.totalSessions': 'Total sessions',
+    'detail.metric.tmux': 'tmux',
+    'detail.metric.queueBytes': 'Queue bytes',
+    'detail.metric.queueFrames': 'Queue frames',
+    'session.idLabel': 'Session ID',
+    'session.meta.created': 'Created',
+    'session.meta.projectPath': 'Project path',
+    'session.meta.runner': 'Runner',
+    'session.createdByUnknown': 'Unknown user',
+    'terminal.meta': ({ tool, sessionId, runner, status, connection, projectPath }) =>
+      `${tool} Session ID: ${sessionId} · Runner: ${runner} · Status: ${status}${connection ? ` · ${connection}` : ''}${projectPath ? ` · Path: ${projectPath}` : ''}`,
+    'terminal.connectionFailed': 'Terminal connection failed',
+    'terminal.startFailedInline': ({ message }) => `[start session failed: ${message}]`,
+    'terminal.tokenFailedInline': ({ message }) => `[terminal token request failed: ${message}]`,
+    'terminal.tokenMissingInline': '[terminal token missing]',
+    'terminal.connectingInline': '[connecting...]',
+    'terminal.connectedInline': '[connected]',
+    'terminal.disconnectedInline': '[disconnected]',
+    'terminal.wsErrorInline': '[websocket error]',
+    'terminal.basicModeInline': '[basic terminal mode enabled]',
+    'terminal.basicInputPlaceholder': 'Basic terminal input: type, press enter, backspace, or paste',
+    'terminal.status.connected': 'Connected',
+    'terminal.status.connecting': 'Connecting',
+    'terminal.status.disconnected': 'Disconnected',
+    'terminal.status.error': 'Connection error',
+    'notify.loginSuccessTitle': 'Signed in',
+    'notify.loginSuccessMessage': ({ user }) => `Welcome back, ${user}.`,
+    'notify.loginFailedTitle': 'Sign-in failed',
+    'notify.loginTotpRequired': 'Enter the verification code to continue signing in.',
+    'notify.loginUnknown': 'Sign-in failed',
+    'notify.refreshRunnerFailedTitle': 'Failed to refresh runners',
+    'notify.refreshRunnerDetailFailedTitle': 'Failed to load runner details',
+    'notify.refreshFailed': 'Refresh failed',
+    'notify.loadRunnerFailed': 'Failed to load runner details',
+    'notify.createSessionTitle': 'Session created',
+    'notify.createSessionMessage': ({ sessionId }) => `Session ID: ${sessionId}. Preparing the terminal now.`,
+    'notify.createSessionInline': ({ sessionId }) => `Session created: ${sessionId}. Opening terminal…`,
+    'notify.createSessionFailedTitle': 'Failed to create session',
+    'notify.createFailed': 'Creation failed',
+    'notify.runnerOfflineTitle': 'Runner offline',
+    'notify.runnerOfflineMessage': 'The current runner is offline, so the terminal cannot be opened.',
+    'notify.startSessionFailedTitle': 'Failed to start session',
+    'notify.stopRequestedTitle': 'Stop request sent',
+    'notify.stopRequestedMessage': ({ sessionId }) => `Session ${sessionId} is stopping.`,
+    'notify.stopFailedTitle': 'Failed to stop session',
+    'notify.deleteSessionTitle': 'Delete session',
+    'notify.deleteSessionBody': 'Deleting a session also removes the linked project. If it is still running, force delete will be used.',
+    'notify.deleteSessionConfirm': 'Delete session',
+    'notify.deleteSessionSuccessTitle': 'Session deleted',
+    'notify.deleteSessionFailedTitle': 'Failed to delete session',
+    'notify.deleteRunnerTitle': 'Delete runner',
+    'notify.deleteRunnerBody': 'Offline runners are removed immediately. Online runners will use force delete and their sessions and projects will be cleaned up.',
+    'notify.deleteRunnerSuccessInline': ({ runnerId }) => `Runner deleted: ${runnerId}`,
+    'notify.deleteRunnerSuccessTitle': 'Runner deleted',
+    'notify.deleteRunnerFailedTitle': 'Failed to delete runner',
+    'notify.copyClaudeTitle': 'Claude resume command copied',
+    'notify.copyGeminiTitle': 'Gemini launch command copied',
+    'notify.copyFailedTitle': 'Copy failed',
+    'notify.settingsCurrentUser': ({ user }) => `Current user: ${user}`,
+    'notify.totpConfigured': 'Two-factor authentication is configured. Remove it first if you need to bind a new device.',
+    'notify.totpNotConfigured': 'Two-factor authentication is not configured. Open /setup before using this console in a broader environment.',
+    'notify.authSavedInline': 'Saved. Signing out the current session now.',
+    'notify.authSavedTitle': 'Credentials updated',
+    'notify.authSavedMessage': 'Sign in again to continue.',
+    'notify.saveFailedTitle': 'Failed to save settings',
+    'notify.disableTotpTitle': 'Remove two-factor authentication',
+    'notify.disableTotpBody': 'Removing TOTP lowers console security. Confirm with the current password and verification code.',
+    'notify.disableTotpConfirm': 'Remove TOTP',
+    'notify.totpPasswordLabel': 'Current password',
+    'notify.totpPasswordPlaceholder': 'Required',
+    'notify.totpCodeLabel': 'Current verification code',
+    'notify.totpCodePlaceholder': '6-digit code',
+    'notify.incompleteTitle': 'Missing information',
+    'notify.incompleteMessage': 'Both the current password and verification code are required.',
+    'notify.totpDeletedInline': 'Two-factor authentication removed.',
+    'notify.totpDeletedTitle': 'Two-factor authentication removed',
+    'notify.totpDeletedMessage': 'Configure it again before production use.',
+    'notify.disableTotpFailedTitle': 'Failed to remove two-factor authentication',
+    'notify.actionUnsupported': 'Unsupported action',
+    'risk.defaultTitle': 'Default credentials are still in use',
+    'risk.defaultBody': 'The admin / agentmesh credentials have not been replaced. Update the username or password before exposing this console.',
+    'risk.defaultAction': 'Update credentials',
+    'risk.totpTitle': 'Two-factor authentication is incomplete',
+    'risk.totpBody': 'This account has not completed TOTP enrollment yet. Finish /setup before broader use.',
+    'risk.totpAction': 'Configure TOTP',
+    'gemini.availableFallback': ({ command }) => `Gemini is available and will use the npx fallback (${command}).`,
+    'gemini.availableEnv': ({ command }) => `Gemini is available and was overridden with AGENTMESH_GEMINI_CMD (${command}).`,
+    'gemini.availableDirect': ({ command }) => `Gemini is available via ${command}.`,
+    'gemini.unavailable': ({ reason }) => `Gemini is unavailable: ${reason}. Install Gemini CLI or set AGENTMESH_GEMINI_CMD.`,
+    'time.unknown': '-',
+    'theme.toggleFallback': 'Toggle theme',
+  },
+};
 
 const state = {
   view: 'login',
@@ -15,6 +533,8 @@ const state = {
     csrfToken: '',
     expiresAt: 0,
   },
+  authMeta: null,
+  settingsData: null,
   runnersAll: [],
   runnerSummary: { total: 0, online: 0, offline: 0, returned: 0 },
   sessionSummary: { total: 0, active: 0 },
@@ -27,21 +547,34 @@ const state = {
   eventRetryAttempt: 0,
   liveRefreshRunning: false,
   liveRefreshQueued: false,
-  runnerSearch: '',
-  sessionSearch: '',
-  riskAction: 'settings',
+  notifications: [],
+  terminalConnection: 'disconnected',
+  mobileChromeOpen: false,
 };
 
 let currentTheme = THEME_LIGHT;
+let currentLanguage = LANG_ZH;
+let currentTerminalPalette = TERM_PALETTE_NOIR;
 let modalResolve = null;
 
 const terminal = createTerminalController({
   $,
   api,
+  t,
   getTheme: () => currentTheme,
+  getPalette: () => currentTerminalPalette,
+  getLanguage: () => currentLanguage,
+  translateError: localizeErrorText,
+  onStatusChange: (status) => {
+    state.terminalConnection = String(status || 'disconnected');
+    if (status === 'connected' && state.activeSession) {
+      state.activeSession.status = 'running';
+    }
+    if (state.activeSession) updateTerminalHeader(state.activeSession);
+  },
   onError: (message) => notify({
     type: 'error',
-    title: '终端连接失败',
+    title: t('terminal.connectionFailed'),
     message,
   }),
 });
@@ -55,22 +588,184 @@ function escapeHtml(raw) {
     .replaceAll("'", '&#39;');
 }
 
+function localeTag(lang = currentLanguage) {
+  return lang === LANG_EN ? 'en-US' : 'zh-CN';
+}
+
+function t(key, params = {}) {
+  const table = MESSAGES[currentLanguage] || MESSAGES[LANG_EN];
+  let value = table[key];
+  if (value === undefined) value = MESSAGES[LANG_EN][key];
+  if (value === undefined) return key;
+  if (typeof value === 'function') return String(value(params));
+  return String(value).replace(/\{(\w+)\}/g, (_, name) => String(params[name] ?? ''));
+}
+
 function readThemePreference() {
   try {
     const stored = String(localStorage.getItem(THEME_STORAGE_KEY) || '').toLowerCase();
     if (stored === THEME_LIGHT || stored === THEME_DARK) return stored;
-  } catch {}
-  const prefersDark = !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
-  return prefersDark ? THEME_DARK : THEME_LIGHT;
+  } catch { }
+  if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) return THEME_DARK;
+  return THEME_LIGHT;
+}
+
+function readLanguagePreference() {
+  try {
+    const stored = String(localStorage.getItem(LANG_STORAGE_KEY) || '').toLowerCase();
+    if (stored === LANG_ZH || stored === LANG_EN) return stored;
+  } catch { }
+  const docLang = String(document.documentElement.getAttribute('lang') || '').toLowerCase();
+  return docLang.startsWith('en') ? LANG_EN : LANG_ZH;
+}
+
+function readTerminalPalettePreference() {
+  try {
+    const stored = String(localStorage.getItem(TERM_PALETTE_STORAGE_KEY) || '').toLowerCase();
+    if (TERM_PALETTES.includes(stored)) return stored;
+    if (stored === 'dark') return TERM_PALETTE_NOIR;
+    if (stored === 'light') return TERM_PALETTE_PAPER;
+    if (stored === 'solarized') return TERM_PALETTE_SOLARIZED_DARK;
+  } catch { }
+  return TERM_PALETTE_NOIR;
+}
+
+function updateLanguageToggle() {
+  const zh = $('btnLangZh');
+  const en = $('btnLangEn');
+  if (zh) {
+    const active = currentLanguage === LANG_ZH;
+    zh.classList.toggle('active', active);
+    zh.setAttribute('aria-pressed', active ? 'true' : 'false');
+  }
+  if (en) {
+    const active = currentLanguage === LANG_EN;
+    en.classList.toggle('active', active);
+    en.setAttribute('aria-pressed', active ? 'true' : 'false');
+  }
 }
 
 function refreshThemeToggle(theme) {
   const btn = $('btnThemeToggle');
   if (!btn) return;
   const dark = theme === THEME_DARK;
-  btn.textContent = dark ? '切换日间' : '切换夜间';
-  btn.setAttribute('aria-label', dark ? '切换到日间模式' : '切换到夜间模式');
-  btn.title = dark ? '切换到日间模式' : '切换到夜间模式';
+  btn.setAttribute('aria-label', dark ? t('theme.toLightAria') : t('theme.toDarkAria'));
+  btn.title = dark ? t('theme.toLightAria') : t('theme.toDarkAria');
+  btn.setAttribute('data-next-theme', dark ? THEME_LIGHT : THEME_DARK);
+}
+
+function updateTerminalPaletteToggle() {
+  const button = $('btnTermPalette');
+  if (button) button.title = t(TERMINAL_PALETTE_PRESETS.find((item) => item.id === currentTerminalPalette)?.labelKey || 'terminal.themeButton');
+  const panel = $('termPalettePanel');
+  if (!panel) return;
+  for (const card of panel.querySelectorAll('[data-term-palette]')) {
+    const active = card.getAttribute('data-term-palette') === currentTerminalPalette;
+    card.classList.toggle('active', active);
+    card.setAttribute('aria-pressed', active ? 'true' : 'false');
+  }
+}
+
+function renderTerminalPalettePanel() {
+  const panel = $('termPalettePanel');
+  if (!panel) return;
+  panel.innerHTML = TERMINAL_PALETTE_PRESETS.map((item) => `
+    <button
+      class="terminal-theme-option${item.id === currentTerminalPalette ? ' active' : ''}"
+      type="button"
+      data-term-palette="${escapeHtml(item.id)}"
+      aria-pressed="${item.id === currentTerminalPalette ? 'true' : 'false'}"
+      style="--preview-bg:${item.background};--preview-fg:${item.foreground};--preview-accent:${item.accent};"
+    >
+      <span class="terminal-theme-preview" aria-hidden="true">
+        <span class="terminal-theme-preview-bar"></span>
+        <span class="terminal-theme-preview-line short"></span>
+        <span class="terminal-theme-preview-line"></span>
+        <span class="terminal-theme-preview-line tiny accent"></span>
+      </span>
+      <span class="terminal-theme-name">${escapeHtml(t(item.labelKey))}</span>
+    </button>
+  `).join('');
+}
+
+function closeTermPalettePanel() {
+  const panel = $('termPalettePanel');
+  const button = $('btnTermPalette');
+  if (!panel || !button) return;
+  panel.classList.add('hidden');
+  button.setAttribute('aria-expanded', 'false');
+}
+
+function setTermPalettePanelOpen(open) {
+  const panel = $('termPalettePanel');
+  const button = $('btnTermPalette');
+  if (!panel || !button || state.view !== 'terminal') return;
+  const next = !!open;
+  panel.classList.toggle('hidden', !next);
+  button.setAttribute('aria-expanded', next ? 'true' : 'false');
+}
+
+function isMobileChromeViewport() {
+  return !!(window.matchMedia && window.matchMedia('(max-width: 820px)').matches);
+}
+
+function syncMobileChromeState() {
+  const toggle = $('btnMobileChromeToggle');
+  const topbar = $('authTopbar');
+  const authenticated = state.auth.authenticated && state.view !== 'login';
+  const mobile = isMobileChromeViewport();
+  if (toggle) {
+    toggle.classList.toggle('hidden', !(authenticated && mobile));
+    toggle.setAttribute('aria-expanded', state.mobileChromeOpen ? 'true' : 'false');
+    toggle.title = state.mobileChromeOpen ? t('chrome.closeMenu') : t('chrome.openMenu');
+    toggle.setAttribute('aria-label', state.mobileChromeOpen ? t('chrome.closeMenu') : t('chrome.openMenu'));
+  }
+  if (!topbar) return;
+  topbar.classList.toggle('mobile-collapsed', !!(authenticated && mobile && !state.mobileChromeOpen));
+}
+
+function applyStaticTranslations() {
+  document.documentElement.lang = currentLanguage === LANG_EN ? 'en' : 'zh-CN';
+  document.title = 'AgentMesh';
+  const description = document.querySelector('meta[name="description"]');
+  if (description) description.setAttribute('content', t('app.description'));
+
+  document.querySelectorAll('[data-i18n]').forEach((node) => {
+    const key = node.getAttribute('data-i18n');
+    if (key) node.textContent = t(key);
+  });
+  document.querySelectorAll('[data-i18n-placeholder]').forEach((node) => {
+    const key = node.getAttribute('data-i18n-placeholder');
+    if (key) node.setAttribute('placeholder', t(key));
+  });
+  document.querySelectorAll('[data-i18n-aria-label]').forEach((node) => {
+    const key = node.getAttribute('data-i18n-aria-label');
+    if (!key) return;
+    const value = t(key);
+    node.setAttribute('aria-label', value);
+    if (node.classList.contains('icon-button')) node.setAttribute('title', value);
+  });
+
+  refreshThemeToggle(currentTheme);
+  renderTerminalPalettePanel();
+  updateLanguageToggle();
+  updateTerminalPaletteToggle();
+  syncMobileChromeState();
+}
+
+function applyLanguage(lang, persist = true) {
+  currentLanguage = lang === LANG_EN ? LANG_EN : LANG_ZH;
+  applyStaticTranslations();
+  setAuth(state.authMeta || state.auth);
+  setLoginTotpMode(!$('authTotpField').classList.contains('hidden'));
+  refreshNotifications(state.authMeta);
+  if (state.settingsData) renderSettings(state.settingsData);
+  if (state.runnersAll.length || state.view === 'workspace') renderRunnerList();
+  if (state.runnerDetail) renderRunnerDetail();
+  if (state.activeSession) updateTerminalHeader(state.activeSession);
+  terminal.refreshCopy();
+  if (!persist) return;
+  try { localStorage.setItem(LANG_STORAGE_KEY, currentLanguage); } catch { }
 }
 
 function applyTheme(theme, persist = true) {
@@ -79,12 +774,22 @@ function applyTheme(theme, persist = true) {
   const root = document.documentElement;
   if (root) {
     if (next === THEME_DARK) root.setAttribute('data-theme', THEME_DARK);
-    else root.removeAttribute('data-theme');
+    else root.setAttribute('data-theme', THEME_LIGHT);
   }
   refreshThemeToggle(next);
   terminal.setTheme();
   if (!persist) return;
-  try { localStorage.setItem(THEME_STORAGE_KEY, next); } catch {}
+  try { localStorage.setItem(THEME_STORAGE_KEY, next); } catch { }
+}
+
+function applyTerminalPalette(palette, persist = true) {
+  const next = TERM_PALETTES.includes(palette) ? palette : TERM_PALETTE_NOIR;
+  currentTerminalPalette = next;
+  updateTerminalPaletteToggle();
+  terminal.setPalette();
+  closeTermPalettePanel();
+  if (!persist) return;
+  try { localStorage.setItem(TERM_PALETTE_STORAGE_KEY, next); } catch { }
 }
 
 function toggleTheme() {
@@ -96,11 +801,86 @@ function notify({ type = 'info', title = '', message = '', ttl = 3600 }) {
   if (!stack) return;
   const toast = document.createElement('article');
   toast.className = 'toast ' + type;
-  toast.innerHTML = `<strong>${escapeHtml(title || '提示')}</strong><span>${escapeHtml(message)}</span>`;
+  toast.innerHTML = `<strong>${escapeHtml(title || t('toast.notice'))}</strong><span>${escapeHtml(message)}</span>`;
   stack.appendChild(toast);
   setTimeout(() => {
     toast.remove();
   }, ttl);
+}
+
+function localizeStatus(status) {
+  const key = 'status.' + String(status || '').toLowerCase();
+  const value = t(key);
+  return value === key ? String(status || t('label.unknown')) : value;
+}
+
+function localizeErrorText(raw) {
+  const message = String(raw || '').trim();
+  if (!message || currentLanguage === LANG_EN) return message;
+
+  const exact = {
+    'invalid password': '当前密码不正确',
+    'username too short': '用户名太短',
+    'password too short (min 12)': '密码太短，至少需要 12 位',
+    'no changes provided': '没有提供任何修改内容',
+    'invalid totp': '动态码不正确',
+    'invalid credentials': '用户名或密码不正确',
+    'too many login attempts, please retry later': '登录尝试次数过多，请稍后再试',
+    unauthorized: '未授权，请重新登录',
+    forbidden: '无权执行该操作',
+    'csrf mismatch': '请求校验失败，请刷新页面后重试',
+    'token is required': '缺少 enroll token',
+    'invalid enroll token': 'enroll token 无效',
+    'enroll token expired': 'enroll token 已过期',
+    'runner not found': '节点不存在',
+    'runner offline': '节点当前离线',
+    'runner reports no supported tools': '节点未上报可用工具',
+    'tool must be codex|claude|gemini': '工具必须是 codex、claude 或 gemini',
+    'projectId and tool are required': '缺少 projectId 或 tool',
+    'project not found': '项目不存在',
+    'runnerId is required (or bind project.runnerId first)': '缺少 runnerId，或项目尚未绑定 runnerId',
+    'session not found': '会话不存在',
+    'session already stopping': '会话已在停止中',
+    'session is active; use force=1 to delete': '会话仍在活动中，请使用 force=1 删除',
+    'no snapshot yet': '尚无快照数据',
+    'no pty data yet': '尚无 PTY 数据',
+    'ws send failed': '向 Runner 发送指令失败',
+    'copy failed': '复制失败',
+    'empty text': '没有可复制的内容',
+    'terminal token missing': '终端令牌缺失',
+    'terminal websocket error': '终端 WebSocket 连接异常',
+    'runner ws busy; retry': 'Runner WebSocket 正忙，请稍后重试',
+    'not available': '当前不可用',
+    'setup disabled': 'Setup 已禁用',
+    'already provisioned': '当前账户已完成绑定',
+    'missing secret; refresh /setup': '缺少密钥，请刷新 /setup 页面后重试',
+    'totp not configured': '尚未配置 TOTP',
+    'asset not found': '资源不存在',
+    'gemini binary not found; using npx @google/gemini-cli fallback': '未检测到 Gemini CLI，仅存在 npx fallback',
+    'gemini binary not found and npx is unavailable': '未检测到 Gemini CLI，且 npx 也不可用',
+  };
+  if (exact[message]) return exact[message];
+
+  let match = message.match(/^session already (.+)$/i);
+  if (match) return `会话已处于${localizeStatus(match[1])}状态`;
+  match = message.match(/^cannot stop session in status (.+)$/i);
+  if (match) return `当前状态为${localizeStatus(match[1])}，无法停止会话`;
+  match = message.match(/^tmux is required on runner host: (.+)$/i);
+  if (match) return `节点主机缺少 tmux：${match[1]}`;
+  match = message.match(/^project path not found: (.+)$/i);
+  if (match) return `项目路径不存在：${match[1]}`;
+  match = message.match(/^project path is not a directory: (.+)$/i);
+  if (match) return `项目路径不是目录：${match[1]}`;
+  match = message.match(/^project path is not accessible: (.+)$/i);
+  if (match) return `项目路径不可访问：${match[1]}`;
+  match = message.match(/^command not found: (.+)$/i);
+  if (match) return `未找到命令：${match[1]}`;
+  match = message.match(/^failed to relay input$/i);
+  if (match) return '转发终端输入失败';
+  match = message.match(/^failed to relay resize$/i);
+  if (match) return '转发终端尺寸变更失败';
+
+  return message;
 }
 
 function setInlineFeedback(id, message = '', kind = '') {
@@ -123,10 +903,10 @@ function modalHide() {
 function modalShow(opts = {}) {
   return new Promise((resolve) => {
     modalResolve = resolve;
-    const title = opts.title ? String(opts.title) : '提示';
+    const title = opts.title ? String(opts.title) : t('modal.title');
     const body = opts.body ? String(opts.body) : '';
-    const okText = opts.okText ? String(opts.okText) : '确认';
-    const cancelText = opts.cancelText ? String(opts.cancelText) : '取消';
+    const okText = opts.okText ? String(opts.okText) : t('button.confirm');
+    const cancelText = opts.cancelText ? String(opts.cancelText) : t('button.cancel');
     const fields = Array.isArray(opts.fields) ? opts.fields : [];
     const values = {};
 
@@ -178,28 +958,39 @@ function toolLabel(tool) {
   if (normalized === 'codex') return 'Codex';
   if (normalized === 'claude') return 'Claude';
   if (normalized === 'gemini') return 'Gemini';
-  return String(tool || 'Unknown');
+  return String(tool || t('label.unknown'));
 }
 
 function formatDateTime(ts) {
   const value = Number(ts || 0);
-  if (!value) return '-';
-  try { return new Date(value).toLocaleString(); } catch { return '-'; }
+  if (!value) return t('time.unknown');
+  try {
+    return new Date(value).toLocaleString(localeTag(currentLanguage), {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false,
+    });
+  } catch {
+    return t('time.unknown');
+  }
 }
 
 function formatRelativeTime(ts) {
   const value = Number(ts || 0);
-  if (!value) return '-';
-  const diff = Date.now() - value;
-  if (diff < 0) return '刚刚';
-  const sec = Math.floor(diff / 1000);
-  if (sec < 60) return sec + ' 秒前';
-  const min = Math.floor(sec / 60);
-  if (min < 60) return min + ' 分钟前';
-  const hour = Math.floor(min / 60);
-  if (hour < 24) return hour + ' 小时前';
-  const day = Math.floor(hour / 24);
-  return day + ' 天前';
+  if (!value) return t('time.unknown');
+  const diffSeconds = Math.round((value - Date.now()) / 1000);
+  const rtf = new Intl.RelativeTimeFormat(localeTag(currentLanguage), { numeric: 'auto' });
+  if (Math.abs(diffSeconds) < 60) return rtf.format(diffSeconds, 'second');
+  const diffMinutes = Math.round(diffSeconds / 60);
+  if (Math.abs(diffMinutes) < 60) return rtf.format(diffMinutes, 'minute');
+  const diffHours = Math.round(diffMinutes / 60);
+  if (Math.abs(diffHours) < 24) return rtf.format(diffHours, 'hour');
+  const diffDays = Math.round(diffHours / 24);
+  return rtf.format(diffDays, 'day');
 }
 
 function runnerPlatformLabel(runner) {
@@ -207,7 +998,7 @@ function runnerPlatformLabel(runner) {
   const os = platform && typeof platform.os === 'string' ? platform.os : '';
   const arch = platform && typeof platform.arch === 'string' ? platform.arch : '';
   const parts = [os, arch].filter(Boolean);
-  return parts.length ? parts.join(' / ') : '未上报';
+  return parts.length ? parts.join(' / ') : t('label.unreported');
 }
 
 function normalizeSearch(raw) {
@@ -265,16 +1056,12 @@ function buildGeminiDiagnosticText(runner) {
   const detail = getRunnerToolDetail(runner, 'gemini');
   if (!detail) return '';
   if (detail.available) {
-    if (detail.source === 'fallback') {
-      return 'Gemini 可用：将使用 npx fallback 启动（' + detail.command + '）。';
-    }
-    if (detail.source === 'env') {
-      return 'Gemini 可用：已通过 AGENTMESH_GEMINI_CMD 指定命令（' + detail.command + '）。';
-    }
-    return 'Gemini 可用：命令 ' + detail.command + '。';
+    if (detail.source === 'fallback') return t('gemini.availableFallback', { command: detail.command });
+    if (detail.source === 'env') return t('gemini.availableEnv', { command: detail.command });
+    return t('gemini.availableDirect', { command: detail.command });
   }
-  const reason = detail.reason ? detail.reason : 'runner 未检测到可执行命令';
-  return 'Gemini 不可用：' + reason + '。可安装 gemini CLI 或设置 AGENTMESH_GEMINI_CMD。';
+  const reason = detail.reason ? localizeErrorText(detail.reason) : t('label.unreported');
+  return t('gemini.unavailable', { reason });
 }
 
 function runnerSupportedTools(runner) {
@@ -286,6 +1073,51 @@ function runnerSupportedTools(runner) {
   const rawTools = runner && runner.capabilities && runner.capabilities.tools;
   if (!rawTools || typeof rawTools !== 'object') return ['codex', 'claude'];
   return TOOL_ORDER.filter((tool) => rawTools[tool] === true);
+}
+
+function runnerAvailableTools(runner) {
+  const details = toolDetailsFromCapabilities(runner && runner.capabilities);
+  const detailKeys = TOOL_ORDER.filter((tool) => details[tool]);
+  if (!detailKeys.length) return runnerSupportedTools(runner);
+  return TOOL_ORDER.filter((tool) => details[tool] && details[tool].available === true && details[tool].source !== 'fallback');
+}
+
+function runnerToolStates(runner) {
+  const supported = new Set(runnerSupportedTools(runner));
+  const available = new Set(runnerAvailableTools(runner));
+  return TOOL_ORDER.map((tool) => {
+    const detail = getRunnerToolDetail(runner, tool);
+    const isAvailable = available.has(tool);
+    const isSupported = supported.has(tool);
+    return {
+      tool,
+      available: isAvailable,
+      supported: isSupported,
+      fallback: !!(detail && detail.available === true && detail.source === 'fallback'),
+      reason: detail && detail.reason ? localizeErrorText(detail.reason) : '',
+    };
+  });
+}
+
+function runnerDisplayName(runnerId) {
+  const current = state.runnerDetail && state.runnerDetail.runner;
+  if (current && current.id === runnerId) return current.name || current.id || t('label.unreported');
+  const match = state.runnersAll.find((runner) => runner.id === runnerId);
+  if (match) return match.name || match.id || t('label.unreported');
+  return runnerId || t('label.unreported');
+}
+
+function runnerProjectPathOptions(detail) {
+  const sessions = detail && Array.isArray(detail.sessions) ? detail.sessions : [];
+  const seen = new Set();
+  const options = [];
+  for (const session of sessions) {
+    const projectPath = typeof session.projectPath === 'string' ? session.projectPath.trim() : '';
+    if (!projectPath || seen.has(projectPath)) continue;
+    seen.add(projectPath);
+    options.push(projectPath);
+  }
+  return options;
 }
 
 function runnerMatchesSearch(runner, query) {
@@ -339,14 +1171,18 @@ function setAuth(authPayload) {
   state.auth.user = authPayload && authPayload.user ? authPayload.user : '';
   state.auth.csrfToken = authPayload && authPayload.csrfToken ? authPayload.csrfToken : '';
   state.auth.expiresAt = Number(authPayload && authPayload.expiresAt ? authPayload.expiresAt : 0);
-  $('authBadge').textContent = state.auth.authenticated ? ('user · ' + state.auth.user) : '未登录';
+  $('authBadge').textContent = state.auth.authenticated
+    ? t('auth.signedIn', { user: state.auth.user })
+    : t('auth.signedOut');
+  renderAuthenticatedChrome();
 }
 
 function setLoginTotpMode(enabled) {
   const on = !!enabled;
   $('authTotpField').classList.toggle('hidden', !on);
+  if ($('loginFootnote')) $('loginFootnote').classList.toggle('hidden', !on);
   if (!on) $('authTotp').value = '';
-  $('btnLogin').textContent = on ? '验证并登录' : '登录';
+  $('btnLogin').textContent = on ? t('button.verifyAndLogin') : t('button.login');
 }
 
 function resetAuth() {
@@ -356,20 +1192,23 @@ function resetAuth() {
     state.autoRefreshTimer = null;
   }
   setAuth({ authenticated: false, user: '', csrfToken: '', expiresAt: 0 });
+  state.authMeta = null;
+  state.settingsData = null;
   state.runnersAll = [];
   state.runnerSummary = { total: 0, online: 0, offline: 0, returned: 0 };
   state.sessionSummary = { total: 0, active: 0 };
   state.runnerDetail = null;
   state.selectedRunnerId = '';
   state.activeSession = null;
-  state.runnerSearch = '';
-  state.sessionSearch = '';
-  $('runnerSearch').value = '';
-  $('sessionSearch').value = '';
+  state.terminalConnection = 'disconnected';
+  state.mobileChromeOpen = false;
   setLoginTotpMode(false);
   setInlineFeedback('loginError', '', '');
   setSummaryTiles();
-  setRiskBanner(null);
+  state.notifications = [];
+  renderNotifications();
+  closeTermPalettePanel();
+  syncMobileChromeState();
 }
 
 async function api(method, path, body) {
@@ -410,34 +1249,126 @@ function setSummaryTiles() {
   $('statActiveSessions').textContent = String(state.sessionSummary.active || 0);
 }
 
-function setRiskBanner(authPayload) {
-  const banner = $('riskBanner');
-  if (!authPayload || !authPayload.authenticated) {
-    banner.classList.add('hidden');
+function closeNotificationPanel() {
+  const panel = $('notificationPanel');
+  const button = $('btnNotifications');
+  if (!panel || !button) return;
+  panel.classList.add('hidden');
+  button.setAttribute('aria-expanded', 'false');
+}
+
+function setNotificationPanelOpen(open) {
+  const panel = $('notificationPanel');
+  const button = $('btnNotifications');
+  if (!panel || !button || !state.auth.authenticated) return;
+  const next = !!open;
+  panel.classList.toggle('hidden', !next);
+  button.setAttribute('aria-expanded', next ? 'true' : 'false');
+}
+
+async function handleNotificationAction(action) {
+  closeNotificationPanel();
+  if (action === 'setup') {
+    location.href = '/setup';
     return;
   }
-  const insecureDefault = authPayload.security && authPayload.security.defaultPassword;
-  const totpMissing = authPayload.totpEnabled === false || authPayload.totpProvisioned === false;
-  if (!insecureDefault && !totpMissing) {
-    banner.classList.add('hidden');
+  if (action === 'settings') {
+    showView('settings');
+    try { await refreshSettings(); } catch { }
+  }
+}
+
+function buildNotifications(authPayload) {
+  if (!authPayload || !authPayload.authenticated) return [];
+  const items = [];
+  if (authPayload.security && authPayload.security.defaultPassword) {
+    items.push({
+      id: 'default-credentials',
+      title: t('risk.defaultTitle'),
+      body: t('risk.defaultBody'),
+      action: 'settings',
+      actionLabel: t('risk.defaultAction'),
+    });
+  }
+  if (authPayload.totpEnabled === false || authPayload.totpProvisioned === false) {
+    items.push({
+      id: 'totp-setup',
+      title: t('risk.totpTitle'),
+      body: t('risk.totpBody'),
+      action: 'setup',
+      actionLabel: t('risk.totpAction'),
+    });
+  }
+  return items;
+}
+
+function renderNotifications() {
+  const button = $('btnNotifications');
+  const count = $('notificationCount');
+  const list = $('notificationList');
+  if (!button || !count || !list) return;
+
+  if (!state.auth.authenticated) {
+    button.classList.add('hidden');
+    count.classList.add('hidden');
+    count.textContent = '0';
+    list.innerHTML = '';
+    closeNotificationPanel();
     return;
   }
-  if (insecureDefault) {
-    $('riskBannerTitle').textContent = '默认凭据仍在使用';
-    $('riskBannerBody').textContent = '检测到 admin / agentmesh 尚未替换。发布前应先修改账号或密码，再继续暴露控制台。';
-    $('btnRiskAction').textContent = '去修改账号密码';
-    state.riskAction = 'settings';
-  } else {
-    $('riskBannerTitle').textContent = '两步验证尚未完成';
-    $('riskBannerBody').textContent = '当前账户还没有完成 TOTP 绑定。建议上线前立即完成 /setup。';
-    $('btnRiskAction').textContent = '去绑定 TOTP';
-    state.riskAction = 'setup';
+
+  button.classList.remove('hidden');
+  const total = state.notifications.length;
+  count.textContent = String(total);
+  count.classList.toggle('hidden', total < 1);
+
+  if (!total) {
+    list.innerHTML = `<div class="notification-empty">${escapeHtml(t('notifications.empty'))}</div>`;
+    return;
   }
-  banner.classList.remove('hidden');
+
+  list.innerHTML = state.notifications.map((item) => `
+    <article class="notification-item">
+      <div class="notification-item-head">
+        <strong class="notification-item-title">${escapeHtml(item.title)}</strong>
+      </div>
+      <div class="notification-item-body">${escapeHtml(item.body)}</div>
+      ${item.action ? `<div class="action-row"><button class="button primary" data-notification-action="${escapeHtml(item.action)}" type="button">${escapeHtml(item.actionLabel)}</button></div>` : ''}
+    </article>
+  `).join('');
+}
+
+function refreshNotifications(authPayload = state.authMeta) {
+  state.notifications = buildNotifications(authPayload);
+  renderNotifications();
+}
+
+function renderAuthenticatedChrome() {
+  const authenticated = state.auth.authenticated && state.view !== 'login';
+  $('authTopbar').classList.toggle('hidden', !authenticated);
+  $('btnLogout').classList.toggle('hidden', !authenticated);
+
+  const viewMap = {
+    workspace: ['workspaceCopy', 'workspaceActions'],
+    settings: ['settingsCopy', 'settingsActions'],
+    runnerDetail: ['detailCopy', 'detailActions'],
+    terminal: ['terminalCopyBlock', 'terminalActions'],
+  };
+
+  for (const [viewName, ids] of Object.entries(viewMap)) {
+    const active = authenticated && state.view === viewName;
+    $(ids[0]).classList.toggle('hidden', !active);
+    $(ids[1]).classList.toggle('hidden', !active);
+  }
+
+  if (!authenticated || state.view !== 'terminal') closeTermPalettePanel();
+  if (!authenticated) closeNotificationPanel();
+  syncMobileChromeState();
 }
 
 function showView(next) {
   state.view = next;
+  if (isMobileChromeViewport()) state.mobileChromeOpen = false;
   $('loginView').classList.toggle('hidden', next !== 'login');
   $('workspaceView').classList.toggle('hidden', next !== 'workspace');
   $('settingsView').classList.toggle('hidden', next !== 'settings');
@@ -445,6 +1376,8 @@ function showView(next) {
   $('terminalView').classList.toggle('hidden', next !== 'terminal');
   document.body.classList.toggle('terminal-active', next === 'terminal');
   terminal.setActive(next === 'terminal');
+  closeNotificationPanel();
+  renderAuthenticatedChrome();
   ensureAutoRefresh();
 }
 
@@ -455,7 +1388,7 @@ function closeEventStream(resetRetry = true) {
   }
   if (resetRetry) state.eventRetryAttempt = 0;
   if (state.eventSource) {
-    try { state.eventSource.close(); } catch {}
+    try { state.eventSource.close(); } catch { }
     state.eventSource = null;
   }
 }
@@ -487,7 +1420,7 @@ async function queueLiveRefresh() {
     state.liveRefreshRunning = false;
     if (state.liveRefreshQueued) {
       state.liveRefreshQueued = false;
-      queueLiveRefresh().catch(() => {});
+      queueLiveRefresh().catch(() => { });
     }
   }
 }
@@ -504,7 +1437,7 @@ function ensureEventStream() {
   state.eventSource = es;
   const onData = () => {
     state.eventRetryAttempt = 0;
-    queueLiveRefresh().catch(() => {});
+    queueLiveRefresh().catch(() => { });
   };
   es.addEventListener('connected', onData);
   es.addEventListener('update', onData);
@@ -528,64 +1461,65 @@ function ensureAutoRefresh() {
     return;
   }
   state.autoRefreshTimer = setInterval(() => {
-    queueLiveRefresh().catch(() => {});
+    queueLiveRefresh().catch(() => { });
   }, 6000);
 }
 
 function renderRunnerList() {
   const host = $('runnerList');
-  const query = normalizeSearch(state.runnerSearch);
   const all = [...state.runnersAll].sort((a, b) => {
     const ao = a.online ? 1 : 0;
     const bo = b.online ? 1 : 0;
     if (ao !== bo) return bo - ao;
     return Number(b.lastSeenAt || 0) - Number(a.lastSeenAt || 0);
   });
-  const filtered = query ? all.filter((runner) => runnerMatchesSearch(runner, query)) : all;
 
-  $('runnerSummaryText').textContent =
-    '在线 ' + state.runnerSummary.online +
-    ' 台 · 离线 ' + state.runnerSummary.offline +
-    ' 台 · 总计 ' + state.runnerSummary.total +
-    ' 台' +
-    (query ? (' · 匹配 ' + filtered.length + ' 台') : '');
+  $('runnerSummaryText').textContent = t('runner.summary', {
+    online: state.runnerSummary.online,
+    offline: state.runnerSummary.offline,
+    total: state.runnerSummary.total,
+  });
 
-  if (!filtered.length) {
-    host.innerHTML = '<div class="empty-state">' + escapeHtml(query ? '没有匹配的 runner。' : '当前没有 runner。') + '</div>';
+  if (!all.length) {
+    host.innerHTML = '<div class="empty-state">' + escapeHtml(t('runner.empty')) + '</div>';
     return;
   }
 
-  host.innerHTML = filtered.map((runner) => {
-    const tools = runnerSupportedTools(runner);
-    const toolBadges = tools.length
-      ? tools.map((tool) => `<span class="badge ${runner.online ? 'ok' : 'neutral'}">${escapeHtml(toolLabel(tool))}</span>`).join('')
-      : '<span class="badge warn">未上报工具</span>';
+  host.innerHTML = all.map((runner) => {
+    const toolStates = runnerToolStates(runner);
+    const toolBadges = toolStates.length
+      ? toolStates.map((item) => `
+          <span
+            class="badge ${item.available && runner.online ? 'ok' : 'neutral'}"
+            title="${escapeHtml(item.available ? toolLabel(item.tool) : (item.reason || t('label.unreported')))}"
+          >
+            ${escapeHtml(toolLabel(item.tool))}
+          </span>
+        `).join('')
+      : `<span class="badge warn">${escapeHtml(t('runner.unsupportedTools'))}</span>`;
     return `
       <article class="runner-card" data-runner-card="1" data-runner-id="${escapeHtml(runner.id)}">
-        <div class="runner-head">
-          <div class="action-row" style="align-items:flex-start">
-            <span class="dot ${runner.online ? 'on' : 'off'}" aria-hidden="true"></span>
-            <div class="runner-title">
-              <strong>${escapeHtml(runner.name || runner.id)}</strong>
-              <span class="runner-id">${escapeHtml(runner.id)}</span>
+        <div class="runner-card-main">
+          <div class="runner-head">
+            <div class="action-row runner-title-row">
+              <span class="dot ${runner.online ? 'on' : 'off'}" aria-hidden="true"></span>
+              <div class="runner-title">
+                <strong>${escapeHtml(runner.name || runner.id)}</strong>
+              </div>
             </div>
           </div>
-          <span class="chip ${runner.online ? 'state connected' : 'subtle'}">${runner.online ? '在线' : '离线'}</span>
-        </div>
-        <div class="badge-row">${toolBadges}</div>
-        <div class="meta-grid">
-          <div class="meta-item">
-            <span>Last seen</span>
-            <strong>${escapeHtml(formatRelativeTime(runner.lastSeenAt))}</strong>
-          </div>
-          <div class="meta-item">
-            <span>Absolute time</span>
-            <strong>${escapeHtml(formatDateTime(runner.lastSeenAt))}</strong>
+          <div class="badge-row">${toolBadges}</div>
+          <div class="meta-grid runner-card-meta">
+            <div class="meta-item">
+              <span>最后在线</span>
+              <strong>${escapeHtml(formatRelativeTime(runner.lastSeenAt))}</strong>
+            </div>
           </div>
         </div>
-        <div class="runner-actions">
-          <button class="button ghost" data-action="open-runner" data-runner-id="${escapeHtml(runner.id)}" type="button">查看详情</button>
-          <button class="button ghost danger" data-action="delete-runner" data-runner-id="${escapeHtml(runner.id)}" type="button">删除</button>
+        <div class="runner-card-side">
+          <div class="runner-actions">
+            <button class="button ghost" data-action="open-runner" data-runner-id="${escapeHtml(runner.id)}" type="button">${escapeHtml(t('button.viewDetails'))}</button>
+          </div>
         </div>
       </article>
     `;
@@ -596,31 +1530,52 @@ function refreshNewSessionToolOptions(runner) {
   const select = $('newSessionTool');
   const result = $('createSessionResult');
   const prev = String(select.value || '').toLowerCase();
-  const supported = runnerSupportedTools(runner);
+  const supported = runnerAvailableTools(runner);
   select.innerHTML = '';
 
   if (!supported.length) {
     const option = document.createElement('option');
     option.value = '';
-    option.textContent = 'no supported tool';
+    option.textContent = t('runner.unsupportedTools');
     select.appendChild(option);
     select.disabled = true;
     $('btnCreateSession').disabled = true;
-    setInlineFeedback('createSessionResult', '当前 runner 未上报可用工具，暂不可创建会话。');
+    setInlineFeedback('createSessionResult', t('session.noSupportedTool'));
     return;
   }
 
   for (const tool of supported) {
     const option = document.createElement('option');
     option.value = tool;
-    option.textContent = tool;
+    option.textContent = toolLabel(tool);
     select.appendChild(option);
   }
 
   select.disabled = false;
   $('btnCreateSession').disabled = false;
   select.value = supported.includes(prev) ? prev : supported[0];
-  if (result.textContent.includes('未上报可用工具')) result.textContent = '';
+  if (result.textContent === t('session.noSupportedTool')) result.textContent = '';
+}
+
+function refreshNewSessionPathOptions(detail) {
+  const select = $('newSessionPath');
+  const prev = String(select.value || '');
+  const projectPaths = runnerProjectPathOptions(detail);
+  select.innerHTML = '';
+
+  const defaultOption = document.createElement('option');
+  defaultOption.value = '';
+  defaultOption.textContent = t('detail.projectPathDefault');
+  select.appendChild(defaultOption);
+
+  for (const projectPath of projectPaths) {
+    const option = document.createElement('option');
+    option.value = projectPath;
+    option.textContent = projectPath;
+    select.appendChild(option);
+  }
+
+  select.value = projectPaths.includes(prev) ? prev : '';
 }
 
 function renderRunnerDetail() {
@@ -628,61 +1583,48 @@ function renderRunnerDetail() {
   if (!detail || !detail.runner) return;
 
   const runner = detail.runner;
-  const supportedTools = runnerSupportedTools(runner);
+  const toolStates = runnerToolStates(runner);
   $('detailRunnerTitle').textContent = runner.name || runner.id;
-  $('detailRunnerSub').textContent =
-    (runner.online ? '在线' : '离线') +
-    ' · 最近心跳 ' + formatRelativeTime(runner.lastSeenAt) +
-    ' · ' + formatDateTime(runner.lastSeenAt);
-  $('detailCapabilitySummary').textContent =
-    '当前 runner 支持 ' +
-    (supportedTools.length ? supportedTools.map((tool) => toolLabel(tool)).join(' / ') : '0 个可用工具') +
-    '，可直接用于新建会话。';
+  $('detailRunnerSub').textContent = t('detail.subline', {
+    status: runner.online ? t('status.online') : t('status.offline'),
+    relative: formatRelativeTime(runner.lastSeenAt),
+    absolute: formatDateTime(runner.lastSeenAt),
+  });
 
-  $('detailTools').innerHTML = supportedTools.length
-    ? supportedTools.map((tool) => `<span class="badge ok">${escapeHtml(toolLabel(tool))}</span>`).join('')
-    : '<span class="badge warn">未上报工具</span>';
+  $('detailTools').innerHTML = toolStates.length
+    ? toolStates.map((item) => `
+        <span class="badge ${item.available ? 'ok' : 'neutral'}" title="${escapeHtml(item.available ? toolLabel(item.tool) : (item.reason || t('label.unreported')))}">
+          ${escapeHtml(toolLabel(item.tool))}
+        </span>
+      `).join('')
+    : `<span class="badge warn">${escapeHtml(t('runner.unsupportedTools'))}</span>`;
 
-  const geminiHint = buildGeminiDiagnosticText(runner);
-  $('detailToolHint').textContent = geminiHint;
-  $('detailToolHint').classList.toggle('hidden', !geminiHint);
-
-  const metrics = detail.metrics || {};
   const lastSeen = formatDateTime(runner.lastSeenAt);
-  const tmux = runner && runner.capabilities && runner.capabilities.features && runner.capabilities.features.tmux === true
-    ? 'available'
-    : 'required / missing';
   $('detailMetrics').innerHTML = [
-    ['Runner ID', runner.id],
-    ['Platform', runnerPlatformLabel(runner)],
-    ['在线状态', runner.online ? 'online' : 'offline'],
-    ['最近心跳', lastSeen],
-    ['活跃会话', String(detail.summary ? detail.summary.activeSessions : 0)],
-    ['总会话', String(detail.summary ? detail.summary.totalSessions : 0)],
-    ['tmux', tmux],
-    ['Queue bytes', String(metrics.queueBytes || 0)],
-    ['Queue frames', String(metrics.queueFrames || 0)],
+    [t('detail.metric.platform'), runnerPlatformLabel(runner)],
+    [t('detail.metric.status'), runner.online ? t('status.online') : t('status.offline')],
+    [t('detail.metric.lastHeartbeat'), lastSeen],
+    [t('detail.metric.activeSessions'), String(detail.summary ? detail.summary.activeSessions : 0)],
+    [t('detail.metric.totalSessions'), String(detail.summary ? detail.summary.totalSessions : 0)],
   ].map(([label, value]) => `
     <div class="meta-item">
       <span>${escapeHtml(label)}</span>
-      <strong class="${label === 'Runner ID' ? 'mono-line' : ''}">${escapeHtml(value)}</strong>
+      <strong>${escapeHtml(value)}</strong>
     </div>
   `).join('');
-  $('detailCapabilities').textContent = JSON.stringify(runner.capabilities || {}, null, 2);
 
   refreshNewSessionToolOptions(runner);
+  refreshNewSessionPathOptions(detail);
 
-  const allSessions = Array.isArray(detail.sessions) ? detail.sessions : [];
-  const query = normalizeSearch(state.sessionSearch);
-  const sessions = query ? allSessions.filter((session) => sessionMatchesSearch(session, query)) : allSessions;
-  $('detailSessionSummary').textContent =
-    '总会话 ' + (detail.summary ? detail.summary.totalSessions : allSessions.length) +
-    ' · 活跃 ' + (detail.summary ? detail.summary.activeSessions : 0) +
-    (query ? (' · 匹配 ' + sessions.length) : '');
+  const sessions = Array.isArray(detail.sessions) ? detail.sessions : [];
+  $('detailSessionSummary').textContent = t('detail.sessionSummary', {
+    total: detail.summary ? detail.summary.totalSessions : sessions.length,
+    active: detail.summary ? detail.summary.activeSessions : 0,
+  });
 
   const host = $('detailSessionList');
   if (!sessions.length) {
-    host.innerHTML = '<div class="empty-state">' + escapeHtml(query ? '没有匹配的会话。' : '暂无会话，可直接在上方创建。') + '</div>';
+    host.innerHTML = '<div class="empty-state">' + escapeHtml(query ? t('detail.noSessionMatched') : t('detail.noSession')) + '</div>';
     return;
   }
 
@@ -693,38 +1635,39 @@ function renderRunnerDetail() {
       : (status === 'error' || status === 'exited' || status === 'ended' ? 'error' : 'connecting');
     const resumeCommand = buildClaudeResumeCommand(session);
     const geminiCommand = buildGeminiLaunchCommand(session, runner);
+    const runnerName = runnerDisplayName(session.runnerId);
     return `
       <article class="session-card" data-session-id="${escapeHtml(session.id)}">
         <div class="session-headline">
           <div class="session-main">
             <strong>${escapeHtml(toolLabel(session.tool))}</strong>
-            <div class="session-id">${escapeHtml(session.id)}</div>
+            <div class="session-id">${escapeHtml(t('session.idLabel'))}: ${escapeHtml(session.id)}</div>
           </div>
           <div class="status-strip">
-            <span class="chip state ${statusClass}">${escapeHtml(status)}</span>
-            <span class="badge neutral">${escapeHtml(session.createdBy || 'unknown')}</span>
+            <span class="chip state ${statusClass}">${escapeHtml(localizeStatus(status))}</span>
+            <span class="badge neutral">${escapeHtml(session.createdBy || t('session.createdByUnknown'))}</span>
           </div>
         </div>
         <div class="session-meta">
           <div class="meta-item">
-            <span>Created</span>
+            <span>${escapeHtml(t('session.meta.created'))}</span>
             <strong>${escapeHtml(formatDateTime(session.createdAt))}</strong>
           </div>
           <div class="meta-item">
-            <span>Project path</span>
+            <span>${escapeHtml(t('session.meta.projectPath'))}</span>
             <strong class="mono-line">${escapeHtml(session.projectPath || '-')}</strong>
           </div>
           <div class="meta-item">
-            <span>Runner</span>
-            <strong class="mono-line">${escapeHtml(session.runnerId || '-')}</strong>
+            <span>${escapeHtml(t('session.meta.runner'))}</span>
+            <strong>${escapeHtml(runnerName || '-')}</strong>
           </div>
         </div>
         <div class="session-actions">
-          <button class="button primary" data-action="open-session" data-session-id="${escapeHtml(session.id)}" type="button">进入 Terminal</button>
-          ${resumeCommand ? `<button class="button ghost" data-action="copy-claude" data-session-id="${escapeHtml(session.id)}" type="button">复制 Resume 命令</button>` : ''}
-          ${geminiCommand ? `<button class="button ghost" data-action="copy-gemini" data-session-id="${escapeHtml(session.id)}" type="button">复制 Gemini 命令</button>` : ''}
-          <button class="button ghost" data-action="stop-session" data-session-id="${escapeHtml(session.id)}" type="button"${status === 'running' || status === 'starting' || status === 'stopping' ? '' : ' disabled'}>停止</button>
-          <button class="button ghost danger" data-action="delete-session" data-session-id="${escapeHtml(session.id)}" type="button">删除</button>
+          <button class="button primary" data-action="open-session" data-session-id="${escapeHtml(session.id)}" type="button">${escapeHtml(t('button.openTerminal'))}</button>
+          ${resumeCommand ? `<button class="button ghost" data-action="copy-claude" data-session-id="${escapeHtml(session.id)}" type="button">${escapeHtml(t('button.copyClaudeResume'))}</button>` : ''}
+          ${geminiCommand ? `<button class="button ghost" data-action="copy-gemini" data-session-id="${escapeHtml(session.id)}" type="button">${escapeHtml(t('button.copyGeminiLaunch'))}</button>` : ''}
+          <button class="button ghost" data-action="stop-session" data-session-id="${escapeHtml(session.id)}" type="button"${status === 'running' || status === 'starting' || status === 'stopping' ? '' : ' disabled'}>${escapeHtml(t('button.stop'))}</button>
+          <button class="button ghost danger" data-action="delete-session" data-session-id="${escapeHtml(session.id)}" type="button">${escapeHtml(t('button.delete'))}</button>
         </div>
       </article>
     `;
@@ -753,9 +1696,10 @@ async function refreshRunnerList(showError = true) {
     renderRunnerList();
   } catch (error) {
     if (showError) {
-      const message = String((error && error.data && error.data.error) || (error && error.message) || '刷新失败');
-      $('runnerList').innerHTML = '<div class="empty-state">加载失败：' + escapeHtml(message) + '</div>';
-      notify({ type: 'error', title: '刷新 runner 失败', message });
+      const rawMessage = String((error && error.data && error.data.error) || (error && error.message) || t('notify.refreshFailed'));
+      const message = localizeErrorText(rawMessage);
+      $('runnerList').innerHTML = '<div class="empty-state">' + escapeHtml(message) + '</div>';
+      notify({ type: 'error', title: t('notify.refreshRunnerFailedTitle'), message });
     }
   }
 }
@@ -768,22 +1712,21 @@ async function refreshRunnerDetail(showError = true) {
     state.runnerDetail = detail;
     renderRunnerDetail();
   } catch (error) {
-    const message = String((error && error.data && error.data.error) || (error && error.message) || '加载 runner 详情失败');
+    const rawMessage = String((error && error.data && error.data.error) || (error && error.message) || t('notify.loadRunnerFailed'));
+    const message = localizeErrorText(rawMessage);
     if (showError) {
       $('detailSessionList').innerHTML = '<div class="empty-state">' + escapeHtml(message) + '</div>';
-      notify({ type: 'error', title: '读取 runner 详情失败', message });
+      notify({ type: 'error', title: t('notify.refreshRunnerDetailFailedTitle'), message });
     }
     if (error && error.status === 404) {
       showView('workspace');
-      refreshRunnerList(false).catch(() => {});
+      refreshRunnerList(false).catch(() => { });
     }
   }
 }
 
 async function openRunnerDetail(runnerId) {
   state.selectedRunnerId = runnerId;
-  state.sessionSearch = '';
-  $('sessionSearch').value = '';
   setInlineFeedback('createSessionResult', '');
   showView('runnerDetail');
   await refreshRunnerDetail(true);
@@ -796,7 +1739,7 @@ async function createSessionForRunner() {
   setInlineFeedback('createSessionResult', '');
   try {
     const tool = $('newSessionTool').value;
-    if (!tool) throw new Error('当前 runner 没有可用工具');
+    if (!tool) throw new Error(t('session.noSupportedTool'));
     const projectPath = $('newSessionPath').value.trim();
     const projectName = $('newSessionProjectName').value.trim();
     const payload = {
@@ -805,12 +1748,12 @@ async function createSessionForRunner() {
       projectName: projectName || undefined,
     };
     const data = await api('POST', '/api/runners/' + encodeURIComponent(runnerId) + '/sessions', payload);
-    setInlineFeedback('createSessionResult', '已创建 session：' + data.sessionId + '，正在进入 terminal…');
+    setInlineFeedback('createSessionResult', t('notify.createSessionInline', { sessionId: data.sessionId }));
     $('newSessionProjectName').value = '';
     notify({
       type: 'success',
-      title: '会话已创建',
-      message: 'sessionId: ' + data.sessionId + '，准备启动终端。',
+      title: t('notify.createSessionTitle'),
+      message: t('notify.createSessionMessage', { sessionId: data.sessionId }),
     });
     await refreshRunnerDetail(false);
     const created = getActiveDetailSession(data.sessionId) || {
@@ -822,9 +1765,10 @@ async function createSessionForRunner() {
     };
     await openSession(created);
   } catch (error) {
-    const message = String((error && error.data && error.data.error) || (error && error.message) || '创建失败');
+    const rawMessage = String((error && error.data && error.data.error) || (error && error.message) || t('notify.createFailed'));
+    const message = localizeErrorText(rawMessage);
     setInlineFeedback('createSessionResult', message, 'error');
-    notify({ type: 'error', title: '创建会话失败', message });
+    notify({ type: 'error', title: t('notify.createSessionFailedTitle'), message });
   } finally {
     $('btnCreateSession').disabled = $('newSessionTool').disabled;
   }
@@ -836,11 +1780,30 @@ function getActiveDetailSession(sessionId) {
 }
 
 function updateTerminalHeader(session) {
-  $('termTitle').textContent = toolLabel(session.tool) + ' · ' + session.id;
-  $('termMeta').textContent =
-    'runner=' + session.runnerId +
-    ' · status=' + String(session.status || 'created') +
-    (session.projectPath ? (' · path=' + session.projectPath) : '');
+  const container = $('termHeaderMeta');
+  if (!container) return;
+
+  const status = session.status || 'created';
+  const statusClass = status === 'running' || status === 'starting' ? 'connected' : 'error';
+
+  container.innerHTML = `
+    <div class="term-header-item">
+      <span>${escapeHtml(t('session.meta.runner'))}</span>
+      <strong>${escapeHtml(runnerDisplayName(session.runnerId))}</strong>
+    </div>
+    <div class="term-header-item">
+      <span>${escapeHtml(t('detail.metric.status'))}</span>
+      <span class="chip state ${statusClass}">${escapeHtml(localizeStatus(status))}</span>
+    </div>
+    <div class="term-header-item">
+      <span>${escapeHtml(t('session.meta.projectPath'))}</span>
+      <strong class="mono-line">${escapeHtml(session.projectPath || '/')}</strong>
+    </div>
+    <div class="term-header-item">
+      <span>${escapeHtml(t('session.idLabel'))}</span>
+      <strong class="mono-line">${escapeHtml(session.id)}</strong>
+    </div>
+  `;
 }
 
 async function ensureSessionStarted(session) {
@@ -859,76 +1822,87 @@ async function openSession(session) {
   if (!runner || !runner.online) {
     notify({
       type: 'warn',
-      title: 'Runner 已离线',
-      message: '当前 runner 离线，无法进入 terminal。',
+      title: t('notify.runnerOfflineTitle'),
+      message: t('notify.runnerOfflineMessage'),
     });
     return;
   }
   state.activeSession = { ...session };
   state.returnView = 'runnerDetail';
+  state.terminalConnection = 'connecting';
   showView('terminal');
   updateTerminalHeader(state.activeSession);
-  let initialOutput = '';
-  try {
-    const latest = await api('GET', '/api/sessions/' + encodeURIComponent(state.activeSession.id) + '/pty/latest');
-    initialOutput = latest && typeof latest.data === 'string' ? latest.data : '';
-  } catch {}
   try {
     await ensureSessionStarted(state.activeSession);
   } catch (error) {
-    const message = String((error && error.data && error.data.error) || (error && error.message) || 'unknown');
+    const rawMessage = String((error && error.data && error.data.error) || (error && error.message) || t('label.unknown'));
+    const message = localizeErrorText(rawMessage);
     terminal.resetOutput();
-    terminal.write('[start session failed: ' + message + ']\r\n');
-    notify({ type: 'error', title: '启动 session 失败', message });
+    terminal.write(t('terminal.startFailedInline', { message }) + '\r\n');
+    notify({ type: 'error', title: t('notify.startSessionFailedTitle'), message });
     return;
   }
   updateTerminalHeader(state.activeSession);
-  await terminal.connect(state.activeSession.id, { initialOutput });
+  await terminal.connect(state.activeSession.id);
 }
 
 async function stopSession(sessionId) {
   try {
     await api('POST', '/api/sessions/' + encodeURIComponent(sessionId) + '/stop', {});
-    notify({ type: 'success', title: '停止请求已发送', message: 'Session ' + sessionId + ' 正在停止。' });
+    notify({
+      type: 'success',
+      title: t('notify.stopRequestedTitle'),
+      message: t('notify.stopRequestedMessage', { sessionId }),
+    });
   } catch (error) {
-    const message = String((error && error.data && error.data.error) || (error && error.message) || '停止失败');
-    notify({ type: 'error', title: '停止失败', message });
+    const rawMessage = String((error && error.data && error.data.error) || (error && error.message) || t('notify.stopFailedTitle'));
+    const message = localizeErrorText(rawMessage);
+    notify({ type: 'error', title: t('notify.stopFailedTitle'), message });
   }
-  setTimeout(() => refreshRunnerDetail(false).catch(() => {}), 250);
+  setTimeout(() => refreshRunnerDetail(false).catch(() => { }), 250);
 }
 
 async function deleteSession(sessionId) {
   const result = await modalShow({
-    title: '删除会话',
-    body: '删除会话会一并清理关联项目；若会话仍在运行，将执行 force 删除。',
-    okText: '确认删除',
-    cancelText: '取消',
+    title: t('notify.deleteSessionTitle'),
+    body: t('notify.deleteSessionBody'),
+    okText: t('notify.deleteSessionConfirm'),
+    cancelText: t('button.cancel'),
     destructive: true,
   });
   if (!result.confirmed) return;
   try {
     await api('DELETE', '/api/sessions/' + encodeURIComponent(sessionId) + '?force=1');
-    notify({ type: 'success', title: '会话已删除', message: sessionId });
-    await refreshRunnerDetail(false);
+    notify({ type: 'success', title: t('notify.deleteSessionSuccessTitle'), message: sessionId });
+    if (state.runnerDetail && Array.isArray(state.runnerDetail.sessions)) {
+      state.runnerDetail.sessions = state.runnerDetail.sessions.filter((s) => s.id !== sessionId);
+      renderRunnerDetail();
+    }
+    setTimeout(() => {
+      if (state.selectedRunnerId === runnerId) {
+        refreshRunnerDetail(false).catch(() => { });
+      }
+    }, 800);
   } catch (error) {
-    const message = String((error && error.data && error.data.error) || (error && error.message) || '删除失败');
-    notify({ type: 'error', title: '删除会话失败', message });
+    const rawMessage = String((error && error.data && error.data.error) || (error && error.message) || t('button.delete'));
+    const message = localizeErrorText(rawMessage);
+    notify({ type: 'error', title: t('notify.deleteSessionFailedTitle'), message });
   }
 }
 
 async function deleteRunner(runnerId) {
   const result = await modalShow({
-    title: '删除 runner',
-    body: '离线 runner 会直接移除，在线 runner 会使用 force 删除并清理其会话与项目。',
-    okText: '确认删除',
-    cancelText: '取消',
+    title: t('notify.deleteRunnerTitle'),
+    body: t('notify.deleteRunnerBody'),
+    okText: t('button.confirm'),
+    cancelText: t('button.cancel'),
     destructive: true,
   });
   if (!result.confirmed) return;
   try {
     await api('DELETE', '/api/runners/' + encodeURIComponent(runnerId) + '?force=1');
-    setInlineFeedback('cleanupResult', '已删除 runner：' + runnerId);
-    notify({ type: 'success', title: 'Runner 已删除', message: runnerId });
+    setInlineFeedback('cleanupResult', t('notify.deleteRunnerSuccessInline', { runnerId }));
+    notify({ type: 'success', title: t('notify.deleteRunnerSuccessTitle'), message: runnerId });
     if (state.selectedRunnerId === runnerId) {
       state.selectedRunnerId = '';
       state.runnerDetail = null;
@@ -936,8 +1910,9 @@ async function deleteRunner(runnerId) {
     }
     await refreshRunnerList(false);
   } catch (error) {
-    const message = String((error && error.data && error.data.error) || (error && error.message) || '删除失败');
-    notify({ type: 'error', title: '删除 runner 失败', message });
+    const rawMessage = String((error && error.data && error.data.error) || (error && error.message) || t('button.delete'));
+    const message = localizeErrorText(rawMessage);
+    notify({ type: 'error', title: t('notify.deleteRunnerFailedTitle'), message });
   }
 }
 
@@ -946,12 +1921,12 @@ async function copyClaudeResume(session) {
   if (!command) return;
   try {
     await copyTextToClipboard(command);
-    notify({ type: 'success', title: '已复制 Claude Resume 命令', message: command, ttl: 2600 });
+    notify({ type: 'success', title: t('notify.copyClaudeTitle'), message: command, ttl: 2600 });
   } catch (error) {
     notify({
       type: 'error',
-      title: '复制失败',
-      message: String((error && error.message) || error || 'unknown'),
+      title: t('notify.copyFailedTitle'),
+      message: localizeErrorText(String((error && error.message) || error || t('label.unknown'))),
     });
   }
 }
@@ -961,37 +1936,45 @@ async function copyGeminiLaunch(session, runner) {
   if (!command) return;
   try {
     await copyTextToClipboard(command);
-    notify({ type: 'success', title: '已复制 Gemini 启动命令', message: command, ttl: 2600 });
+    notify({ type: 'success', title: t('notify.copyGeminiTitle'), message: command, ttl: 2600 });
   } catch (error) {
     notify({
       type: 'error',
-      title: '复制失败',
-      message: String((error && error.message) || error || 'unknown'),
+      title: t('notify.copyFailedTitle'),
+      message: localizeErrorText(String((error && error.message) || error || t('label.unknown'))),
     });
   }
 }
 
 async function refreshAuth() {
   const me = await api('GET', '/api/auth/me');
+  state.authMeta = me;
   setAuth(me);
-  setRiskBanner(me);
+  refreshNotifications(me);
   return me;
 }
 
 async function refreshSettings() {
   const settings = await api('GET', '/api/admin/settings');
+  state.settingsData = settings;
+  renderSettings(settings);
+  return settings;
+}
+
+function renderSettings(settings) {
   const totp = settings && settings.web && settings.web.totp ? settings.web.totp : {};
-  $('settingsSub').textContent = '当前用户：' + (settings && settings.web && settings.web.user ? settings.web.user : '-');
+  $('settingsSub').textContent = t('notify.settingsCurrentUser', {
+    user: settings && settings.web && settings.web.user ? settings.web.user : '-',
+  });
   if (totp && totp.configured) {
-    $('totpStatus').textContent = '已配置两步验证。若需更换设备，请先删除再重新绑定。';
+    $('totpStatus').textContent = t('notify.totpConfigured');
     $('btnTotpDisable').classList.remove('hidden');
     $('btnTotpEnable').classList.add('hidden');
   } else {
-    $('totpStatus').textContent = '未配置两步验证。建议上线前立刻访问 /setup 完成绑定。';
+    $('totpStatus').textContent = t('notify.totpNotConfigured');
     $('btnTotpDisable').classList.add('hidden');
     $('btnTotpEnable').classList.remove('hidden');
   }
-  return settings;
 }
 
 async function saveAuthSettings() {
@@ -1002,13 +1985,14 @@ async function saveAuthSettings() {
     const newUser = $('setNewUser').value.trim();
     const newPassword = $('setNewPassword').value;
     const response = await api('POST', '/api/admin/auth/change', { oldPassword, newUser, newPassword });
-    setInlineFeedback('saveAuthResult', '已保存，正在退出当前会话。');
-    notify({ type: 'success', title: '账号信息已保存', message: '需要重新登录后继续。' });
+    setInlineFeedback('saveAuthResult', t('notify.authSavedInline'));
+    notify({ type: 'success', title: t('notify.authSavedTitle'), message: t('notify.authSavedMessage') });
     if (response && response.relogin) await doLogout();
   } catch (error) {
-    const message = String((error && error.data && error.data.error) || (error && error.message) || '保存失败');
+    const rawMessage = String((error && error.data && error.data.error) || (error && error.message) || t('notify.saveFailedTitle'));
+    const message = localizeErrorText(rawMessage);
     setInlineFeedback('saveAuthResult', message, 'error');
-    notify({ type: 'error', title: '保存失败', message });
+    notify({ type: 'error', title: t('notify.saveFailedTitle'), message });
   } finally {
     $('btnSaveAuth').disabled = false;
     $('setOldPassword').value = '';
@@ -1025,38 +2009,50 @@ async function totpAction(kind) {
 
   if (kind === 'disable') {
     const result = await modalShow({
-      title: '删除两步验证',
-      body: '删除后会降低控制台安全性。请再次输入密码和当前动态码确认。',
-      okText: '继续删除',
-      cancelText: '取消',
+      title: t('notify.disableTotpTitle'),
+      body: t('notify.disableTotpBody'),
+      okText: t('notify.disableTotpConfirm'),
+      cancelText: t('button.cancel'),
       destructive: true,
       fields: [
-        { key: 'password', label: '当前密码', placeholder: '必填', type: 'password' },
-        { key: 'totp', label: '当前动态码', placeholder: '6 位动态码', inputmode: 'numeric', autocomplete: 'one-time-code' },
+        {
+          key: 'password',
+          label: t('notify.totpPasswordLabel'),
+          placeholder: t('notify.totpPasswordPlaceholder'),
+          type: 'password',
+        },
+        {
+          key: 'totp',
+          label: t('notify.totpCodeLabel'),
+          placeholder: t('notify.totpCodePlaceholder'),
+          inputmode: 'numeric',
+          autocomplete: 'one-time-code',
+        },
       ],
     });
     if (!result.confirmed) return;
     const password = String(result.values.password || '');
     const totp = String(result.values.totp || '').trim();
     if (!password || !totp) {
-      notify({ type: 'warn', title: '信息不完整', message: '需要同时提供当前密码和动态码。' });
+      notify({ type: 'warn', title: t('notify.incompleteTitle'), message: t('notify.incompleteMessage') });
       return;
     }
     try {
       await api('POST', '/api/admin/totp/disable', { password, totp });
-      setInlineFeedback('totpActionResult', '已删除两步验证。');
-      notify({ type: 'success', title: '两步验证已删除', message: '如需上线，请尽快重新绑定。' });
+      setInlineFeedback('totpActionResult', t('notify.totpDeletedInline'));
+      notify({ type: 'success', title: t('notify.totpDeletedTitle'), message: t('notify.totpDeletedMessage') });
       await refreshAuth();
       await refreshSettings();
     } catch (error) {
-      const message = String((error && error.data && error.data.error) || (error && error.message) || '操作失败');
+      const rawMessage = String((error && error.data && error.data.error) || (error && error.message) || t('notify.actionUnsupported'));
+      const message = localizeErrorText(rawMessage);
       setInlineFeedback('totpActionResult', message, 'error');
-      notify({ type: 'error', title: '删除两步验证失败', message });
+      notify({ type: 'error', title: t('notify.disableTotpFailedTitle'), message });
     }
     return;
   }
 
-  setInlineFeedback('totpActionResult', '操作不支持', 'error');
+  setInlineFeedback('totpActionResult', t('notify.actionUnsupported'), 'error');
 }
 
 async function doLogin(ev) {
@@ -1073,26 +2069,32 @@ async function doLogin(ev) {
     const response = await api('POST', '/api/auth/login', payload);
     if (response && response.needTotp && !response.authenticated) {
       setLoginTotpMode(true);
-      setInlineFeedback('loginError', '请输入动态码继续登录', 'error');
-      try { $('authTotp').focus(); } catch {}
+      setInlineFeedback('loginError', t('notify.loginTotpRequired'), 'error');
+      try { $('authTotp').focus(); } catch { }
       return;
     }
-    if (!response || !response.authenticated) throw new Error('登录失败');
+    if (!response || !response.authenticated) throw new Error(t('notify.loginUnknown'));
     setAuth(response);
     setLoginTotpMode(false);
     showView('workspace');
     await refreshRunnerList(true);
     await refreshAuth();
-    notify({ type: 'success', title: '登录成功', message: '欢迎回来，' + state.auth.user + '。', ttl: 2200 });
+    notify({
+      type: 'success',
+      title: t('notify.loginSuccessTitle'),
+      message: t('notify.loginSuccessMessage', { user: state.auth.user }),
+      ttl: 2200,
+    });
   } catch (error) {
-    const message = String((error && error.data && error.data.error) || (error && error.message) || '登录失败');
+    const rawMessage = String((error && error.data && error.data.error) || (error && error.message) || t('notify.loginUnknown'));
+    const message = localizeErrorText(rawMessage);
     setInlineFeedback('loginError', message, 'error');
-    if (message.includes('invalid credentials')) {
+    if (rawMessage.includes('invalid credentials')) {
       setLoginTotpMode(false);
     } else {
       $('authTotp').value = '';
     }
-    notify({ type: 'error', title: '登录失败', message });
+    notify({ type: 'error', title: t('notify.loginFailedTitle'), message });
   } finally {
     $('btnLogin').disabled = false;
   }
@@ -1102,7 +2104,7 @@ async function doLogout() {
   $('btnLogout').disabled = true;
   try {
     await api('POST', '/api/auth/logout', {});
-  } catch {}
+  } catch { }
   resetAuth();
   showView('login');
   $('btnLogout').disabled = false;
@@ -1163,44 +2165,54 @@ function bindSessionListEvents() {
 }
 
 function bindUiEvents() {
+  $('btnLangZh').onclick = () => applyLanguage(LANG_ZH, true);
+  $('btnLangEn').onclick = () => applyLanguage(LANG_EN, true);
   $('btnThemeToggle').onclick = () => toggleTheme();
+  $('btnMobileChromeToggle').onclick = () => {
+    state.mobileChromeOpen = !state.mobileChromeOpen;
+    syncMobileChromeState();
+  };
+  $('btnTermFontDown').onclick = () => terminal.adjustFontSize(-1);
+  $('btnTermFontUp').onclick = () => terminal.adjustFontSize(1);
+  $('btnTermPalette').onclick = (ev) => {
+    ev.stopPropagation();
+    const expanded = $('btnTermPalette').getAttribute('aria-expanded') === 'true';
+    setTermPalettePanelOpen(!expanded);
+  };
   $('loginForm').addEventListener('submit', doLogin);
   $('btnLogout').onclick = () => doLogout();
   $('btnRefreshRunners').onclick = () => refreshRunnerList(true);
+  $('btnDeleteRunner').onclick = () => {
+    const runnerId = state.runnerDetail && state.runnerDetail.runner && state.runnerDetail.runner.id;
+    if (runnerId) deleteRunnerFlow(runnerId);
+  };
+  $('btnNotifications').onclick = (ev) => {
+    ev.stopPropagation();
+    const expanded = $('btnNotifications').getAttribute('aria-expanded') === 'true';
+    setNotificationPanelOpen(!expanded);
+  };
   $('btnOpenSettings').onclick = async () => {
+    closeNotificationPanel();
     showView('settings');
-    try { await refreshSettings(); } catch {}
+    try { await refreshSettings(); } catch { }
   };
   $('btnBackFromSettings').onclick = async () => {
+    closeNotificationPanel();
     showView('workspace');
     await refreshRunnerList(false);
   };
   $('btnSaveAuth').onclick = () => saveAuthSettings();
   $('btnTotpDisable').onclick = () => totpAction('disable');
   $('btnTotpEnable').onclick = () => totpAction('enable');
-  $('btnRiskAction').onclick = async () => {
-    if (state.riskAction === 'setup') {
-      location.href = '/setup';
-      return;
-    }
-    showView('settings');
-    await refreshSettings();
-  };
 
   $('btnBackToRunners').onclick = async () => {
+    closeNotificationPanel();
     showView('workspace');
     await refreshRunnerList(false);
   };
   $('btnRefreshDetail').onclick = () => refreshRunnerDetail(true);
   $('btnCreateSession').onclick = () => createSessionForRunner();
-  $('runnerSearch').addEventListener('input', (ev) => {
-    state.runnerSearch = String(ev.target && ev.target.value ? ev.target.value : '');
-    renderRunnerList();
-  });
-  $('sessionSearch').addEventListener('input', (ev) => {
-    state.sessionSearch = String(ev.target && ev.target.value ? ev.target.value : '');
-    renderRunnerDetail();
-  });
+
 
   $('btnBackFromTerminal').onclick = async () => {
     showView(state.returnView || 'runnerDetail');
@@ -1219,13 +2231,45 @@ function bindUiEvents() {
       if (done) done({ confirmed: false, values: {} });
     }
   });
+  $('notificationPanel').addEventListener('click', (ev) => {
+    const target = ev.target instanceof Element ? ev.target.closest('[data-notification-action]') : null;
+    if (!target) return;
+    ev.preventDefault();
+    ev.stopPropagation();
+    handleNotificationAction(target.getAttribute('data-notification-action') || '');
+  });
+  $('termPalettePanel').addEventListener('click', (ev) => {
+    const target = ev.target instanceof Element ? ev.target.closest('[data-term-palette]') : null;
+    if (!target) return;
+    ev.preventDefault();
+    ev.stopPropagation();
+    applyTerminalPalette(target.getAttribute('data-term-palette') || TERM_PALETTE_NOIR, true);
+  });
+  document.addEventListener('click', (ev) => {
+    const target = ev.target;
+    const notificationWrap = document.querySelector('.notification-wrap');
+    const themeWrap = document.querySelector('.terminal-theme-wrap');
+    if (target instanceof Node) {
+      if (notificationWrap && notificationWrap.contains(target)) return;
+      if (themeWrap && themeWrap.contains(target)) return;
+    }
+    closeNotificationPanel();
+    closeTermPalettePanel();
+  });
+  window.addEventListener('resize', () => {
+    syncMobileChromeState();
+  });
 
   bindRunnerListEvents();
   bindSessionListEvents();
 }
 
 async function bootstrap() {
+  currentLanguage = readLanguagePreference();
+  currentTerminalPalette = readTerminalPalettePreference();
+  applyLanguage(currentLanguage, false);
   applyTheme(readThemePreference(), false);
+  applyTerminalPalette(currentTerminalPalette, false);
   setSummaryTiles();
   terminal.init();
   bindUiEvents();
@@ -1237,7 +2281,7 @@ async function bootstrap() {
       await refreshRunnerList(true);
       return;
     }
-  } catch {}
+  } catch { }
 
   resetAuth();
   showView('login');

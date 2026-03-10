@@ -31,6 +31,12 @@ type CommandResult = {
   err: string;
 };
 
+type TmuxCursor = {
+  x: number;
+  y: number;
+  visible: boolean;
+};
+
 type TmuxRuntime = {
   sessionName: string;
   windowName: string;
@@ -43,6 +49,7 @@ type TmuxRuntime = {
   pollTimer: NodeJS.Timeout | null;
   closed: boolean;
   lastCapture: string;
+  lastCursor: TmuxCursor | null;
   commandQueue: Promise<void>;
   dataHandlers: Set<(data: string) => void>;
   exitHandlers: Set<() => void>;
@@ -140,6 +147,19 @@ export function renderCapturedPaneDelta(previousCapture: string, nextCapture: st
   return `${CLEAR_SCREEN}${next}`;
 }
 
+function renderCapturedCursor(cursor: TmuxCursor | null): string {
+  if (!cursor) return '';
+  const row = Math.max(1, Math.floor(cursor.y) + 1);
+  const col = Math.max(1, Math.floor(cursor.x) + 1);
+  return `${cursor.visible ? '\u001b[?25h' : '\u001b[?25l'}\u001b[${row};${col}H`;
+}
+
+function sameCursor(left: TmuxCursor | null, right: TmuxCursor | null): boolean {
+  if (!left && !right) return true;
+  if (!left || !right) return false;
+  return left.x === right.x && left.y === right.y && left.visible === right.visible;
+}
+
 function emitData(runtime: TmuxRuntime, data: string): void {
   if (!data) return;
   for (const handler of runtime.dataHandlers) handler(data);
@@ -201,9 +221,30 @@ async function pollCapture(runtime: TmuxRuntime): Promise<void> {
   }
 
   const nextCapture = normalizeCapture(result.out);
+  const cursorProbe = await runTmux(['display-message', '-p', '-t', runtime.target, '#{cursor_x} #{cursor_y} #{cursor_flag}']);
+  if (runtime.closed) return;
+  if (cursorProbe.code !== 0) {
+    const combined = `${cursorProbe.err || ''}\n${cursorProbe.out || ''}`;
+    if (/can't find (session|window|pane)|no server running/i.test(combined)) {
+      emitExit(runtime);
+      return;
+    }
+  }
+
+  const cursorParts = String(cursorProbe.out || '').trim().split(/\s+/);
+  const nextCursor = cursorParts.length >= 3
+    ? {
+        x: Number(cursorParts[0]) || 0,
+        y: Number(cursorParts[1]) || 0,
+        visible: String(cursorParts[2]) === '1',
+      }
+    : null;
   const delta = renderCapturedPaneDelta(runtime.lastCapture, nextCapture);
+  const cursorMoved = !sameCursor(runtime.lastCursor, nextCursor);
   runtime.lastCapture = nextCapture;
-  emitData(runtime, delta);
+  runtime.lastCursor = nextCursor;
+  const cursorControl = (delta || cursorMoved) ? renderCapturedCursor(nextCursor) : '';
+  emitData(runtime, `${delta}${cursorControl}`);
   schedulePoll(runtime);
 }
 
@@ -254,6 +295,7 @@ function createTmuxPty(sessionId: string, cwd: string, cols: number, rows: numbe
     pollTimer: null,
     closed: false,
     lastCapture: '',
+    lastCursor: null,
     commandQueue: Promise.resolve(),
     dataHandlers: new Set(),
     exitHandlers: new Set(),
@@ -280,7 +322,7 @@ function createTmuxPty(sessionId: string, cwd: string, cols: number, rows: numbe
     },
     onData(cb: (data: string) => void) {
       runtime.dataHandlers.add(cb);
-      if (runtime.lastCapture) cb(`${CLEAR_SCREEN}${runtime.lastCapture}`);
+      if (runtime.lastCapture) cb(`${CLEAR_SCREEN}${runtime.lastCapture}${renderCapturedCursor(runtime.lastCursor)}`);
     },
     onExit(cb: () => void) {
       if (runtime.closed) {

@@ -1,173 +1,349 @@
 <!doctype html>
 <html lang="zh-CN">
+
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>AgentMesh</title>
-  <meta
-    name="description"
-    content="AgentMesh 控制台，用于连接远端网关、管理本地 runner，并在浏览器中安全使用 Codex、Claude 和 Gemini CLI。"
-  />
+  <meta name="description" content="AgentMesh 控制台，用于连接远端网关、管理本地 runner，并在浏览器中安全使用 Codex、Claude 和 Gemini CLI。" />
   <link rel="icon" href="data:," />
   <link rel="stylesheet" href="/assets/xterm/xterm.css" />
   <link rel="stylesheet" href="/assets/ui/styles.css" />
 </head>
+
 <body>
-  <div class="ambient" aria-hidden="true">
-    <span class="ambient-grid"></span>
-    <span class="ambient-orb ambient-orb-a"></span>
-    <span class="ambient-orb ambient-orb-b"></span>
-    <span class="ambient-orb ambient-orb-c"></span>
+  <div class="backdrop" aria-hidden="true">
+    <span class="grid-overlay"></span>
+    <span class="floating-glyph" style="--x:4%;--size:11px;--dur:18s;--delay:0s;--opacity:0.12;">01</span>
+    <span class="floating-glyph" style="--x:9%;--size:14px;--dur:24s;--delay:3s;--opacity:0.10;">{}</span>
+    <span class="floating-glyph" style="--x:15%;--size:10px;--dur:20s;--delay:7s;--opacity:0.13;">0x</span>
+    <span class="floating-glyph" style="--x:22%;--size:16px;--dur:28s;--delay:1s;--opacity:0.09;">≈</span>
+    <span class="floating-glyph" style="--x:28%;--size:13px;--dur:16s;--delay:5s;--opacity:0.11;">λ</span>
+    <span class="floating-glyph" style="--x:35%;--size:11px;--dur:22s;--delay:9s;--opacity:0.10;">//</span>
+    <span class="floating-glyph" style="--x:42%;--size:15px;--dur:19s;--delay:2s;--opacity:0.12;">∞</span>
+    <span class="floating-glyph" style="--x:49%;--size:12px;--dur:25s;--delay:6s;--opacity:0.09;">fn</span>
+    <span class="floating-glyph" style="--x:56%;--size:11px;--dur:21s;--delay:11s;--opacity:0.11;">&lt;/&gt;</span>
+    <span class="floating-glyph" style="--x:63%;--size:14px;--dur:17s;--delay:4s;--opacity:0.10;">√</span>
+    <span class="floating-glyph" style="--x:69%;--size:10px;--dur:23s;--delay:8s;--opacity:0.13;">1</span>
+    <span class="floating-glyph" style="--x:75%;--size:15px;--dur:27s;--delay:0.5s;--opacity:0.09;">π</span>
+    <span class="floating-glyph" style="--x:81%;--size:12px;--dur:20s;--delay:13s;--opacity:0.10;">=&gt;</span>
+    <span class="floating-glyph" style="--x:87%;--size:14px;--dur:18s;--delay:3.5s;--opacity:0.11;">∑</span>
+    <span class="floating-glyph" style="--x:93%;--size:11px;--dur:26s;--delay:7.5s;--opacity:0.12;">0</span>
+    <span class="floating-glyph" style="--x:12%;--size:10px;--dur:30s;--delay:15s;--opacity:0.08;">&&</span>
+    <span class="floating-glyph" style="--x:46%;--size:13px;--dur:22s;--delay:17s;--opacity:0.09;">∂</span>
+    <span class="floating-glyph" style="--x:72%;--size:11px;--dur:19s;--delay:12s;--opacity:0.10;">if</span>
   </div>
 
   <div id="toastStack" class="toast-stack" aria-live="polite" aria-atomic="false"></div>
 
   <div id="appRoot" class="app-shell">
     <header class="chrome">
-      <div class="brand-lockup">
-        <div class="brand-mark" aria-hidden="true">
-          <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <rect x="4" y="5" width="24" height="22" rx="7" stroke="currentColor" stroke-width="1.75" />
-            <path d="M10 13.5h12M10 18.5h8" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" />
-          </svg>
+      <div class="chrome-inner">
+        <div class="chrome-main">
+          <div class="brand-lockup">
+            <div class="brand-mark" aria-hidden="true">
+              <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor"
+                stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <rect width="32" height="32" rx="8" fill="currentColor"></rect>
+                <path d="M11 20l5-5-5-5" stroke="white"></path>
+                <path d="M16 20l5-5-5-5" stroke="white"></path>
+              </svg>
+            </div>
+            <div class="brand-name">AgentMesh</div>
+          </div>
+
+          <div class="chrome-actions">
+            <span id="authBadge" class="chrome-meta" data-i18n="auth.signedOut">未登录</span>
+            <div class="segmented-control" role="group" data-i18n-aria-label="chrome.language">
+              <button id="btnLangZh" class="segment active" type="button" aria-pressed="true">ZH</button>
+              <button id="btnLangEn" class="segment" type="button" aria-pressed="false">EN</button>
+            </div>
+            <button id="btnThemeToggle" class="button ghost icon-button theme-toggle-button" type="button"
+              aria-label="切换主题" data-next-theme="dark">
+              <svg class="button-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true" stroke="currentColor"
+                stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="5"></circle>
+                <line x1="12" y1="1" x2="12" y2="3"></line>
+                <line x1="12" y1="21" x2="12" y2="23"></line>
+                <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                <line x1="1" y1="12" x2="3" y2="12"></line>
+                <line x1="21" y1="12" x2="23" y2="12"></line>
+                <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+              </svg>
+            </button>
+            <button id="btnMobileChromeToggle" class="button ghost icon-button mobile-menu-toggle hidden" type="button"
+              aria-expanded="false" aria-label="打开菜单">
+              <svg class="button-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M5 7h14M5 12h14M5 17h14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+              </svg>
+            </button>
+          </div>
         </div>
-        <div>
-          <div class="brand-name">AgentMesh</div>
-          <div class="brand-sub">Remote runner control for Codex, Claude, and Gemini CLI</div>
+
+        <div id="authTopbar" class="auth-topbar hidden">
+          <div class="page-copy">
+            <div id="workspaceCopy" class="page-copy-block hidden">
+              <span class="eyebrow" data-i18n="workspace.eyebrow">控制台</span>
+              <h1 data-i18n="workspace.title">AgentMesh 控制台</h1>
+              <p id="runnerSummaryText" class="section-copy hidden">-</p>
+            </div>
+
+            <div id="settingsCopy" class="page-copy-block hidden">
+              <span class="eyebrow" data-i18n="settings.eyebrow">安全设置</span>
+              <h1 data-i18n="settings.title">控制台设置</h1>
+              <p id="settingsSub" class="section-copy">-</p>
+            </div>
+
+            <div id="detailCopy" class="page-copy-block hidden">
+              <span class="eyebrow" data-i18n="detail.eyebrow">节点详情</span>
+              <h1 id="detailRunnerTitle">节点</h1>
+              <p id="detailRunnerSub" class="section-copy">-</p>
+            </div>
+
+            <div id="terminalCopyBlock" class="page-copy-block terminal-copy-block hidden">
+              <span class="eyebrow" data-i18n="terminal.eyebrow">终端</span>
+              <div id="termHeaderMeta" class="terminal-header-meta"></div>
+            </div>
+          </div>
+
+          <div class="page-actions">
+            <div class="notification-wrap">
+              <button id="btnNotifications" class="button ghost icon-button notification-button" type="button"
+                aria-expanded="false" data-i18n-aria-label="notifications.openAria">
+                <svg class="notification-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true" stroke="currentColor"
+                  stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"></path>
+                  <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+                </svg>
+                <span id="notificationCount" class="notification-count hidden">0</span>
+              </button>
+
+              <div id="notificationPanel" class="notification-panel hidden">
+                <div class="notification-panel-head">
+                  <strong data-i18n="notifications.title">通知</strong>
+                </div>
+                <div id="notificationList" class="notification-list"></div>
+              </div>
+            </div>
+
+            <div id="workspaceActions" class="action-row wrap hidden">
+              <button id="btnOpenSettings" class="button ghost icon-button" type="button"
+                data-i18n-aria-label="button.settings">
+                <svg class="button-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true" stroke="currentColor"
+                  stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+                  <line x1="4" y1="21" x2="4" y2="14"></line>
+                  <line x1="4" y1="10" x2="4" y2="3"></line>
+                  <line x1="12" y1="21" x2="12" y2="12"></line>
+                  <line x1="12" y1="8" x2="12" y2="3"></line>
+                  <line x1="20" y1="21" x2="20" y2="16"></line>
+                  <line x1="20" y1="12" x2="20" y2="3"></line>
+                  <line x1="1" y1="14" x2="7" y2="14"></line>
+                  <line x1="9" y1="8" x2="15" y2="8"></line>
+                  <line x1="17" y1="16" x2="23" y2="16"></line>
+                </svg>
+              </button>
+              <button id="btnRefreshRunners" class="button ghost icon-button" type="button"
+                data-i18n-aria-label="button.refresh">
+                <svg class="button-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true" stroke="currentColor"
+                  stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M23 4v6h-6"></path>
+                  <path d="M1 20v-6h6"></path>
+                  <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+                </svg>
+              </button>
+            </div>
+
+            <div id="settingsActions" class="action-row wrap hidden">
+              <button id="btnBackFromSettings" class="button ghost icon-button" type="button"
+                data-i18n-aria-label="button.backToConsole">
+                <svg class="button-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true" stroke="currentColor"
+                  stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="15 18 9 12 15 6"></polyline>
+                </svg>
+              </button>
+            </div>
+
+            <div id="detailActions" class="action-row wrap hidden">
+              <button id="btnBackToRunners" class="button ghost icon-button" type="button"
+                data-i18n-aria-label="button.backToList">
+                <svg class="button-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true" stroke="currentColor"
+                  stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="15 18 9 12 15 6"></polyline>
+                </svg>
+              </button>
+              <button id="btnRefreshDetail" class="button ghost icon-button" type="button"
+                data-i18n-aria-label="button.refreshDetail">
+                <svg class="button-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true" stroke="currentColor"
+                  stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M23 4v6h-6"></path>
+                  <path d="M1 20v-6h6"></path>
+                  <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+                </svg>
+              </button>
+              <button id="btnDeleteRunner" class="button ghost danger icon-button" type="button"
+                data-i18n-aria-label="button.delete">
+                <svg class="button-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true" stroke="currentColor"
+                  stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="3 6 5 6 21 6"></polyline>
+                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                  <line x1="10" y1="11" x2="10" y2="17"></line>
+                  <line x1="14" y1="11" x2="14" y2="17"></line>
+                </svg>
+              </button>
+            </div>
+
+            <div id="terminalActions" class="action-row wrap hidden">
+              <button id="btnTermFontDown" class="button ghost terminal-theme-button" type="button"
+                data-i18n-aria-label="terminal.zoomOutAria">
+                <svg class="button-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true" stroke="currentColor"
+                  stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="11" cy="11" r="8"></circle>
+                  <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                  <line x1="8" y1="11" x2="14" y2="11"></line>
+                </svg>
+                <span data-i18n="button.zoomOut">缩小</span>
+              </button>
+              <button id="btnTermFontUp" class="button ghost terminal-theme-button" type="button"
+                data-i18n-aria-label="terminal.zoomInAria">
+                <svg class="button-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true" stroke="currentColor"
+                  stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="11" cy="11" r="8"></circle>
+                  <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                  <line x1="11" y1="8" x2="11" y2="14"></line>
+                  <line x1="8" y1="11" x2="14" y2="11"></line>
+                </svg>
+                <span data-i18n="button.zoomIn">放大</span>
+              </button>
+              <div class="terminal-theme-wrap">
+                <button id="btnTermPalette" class="button ghost terminal-theme-button" type="button"
+                  aria-expanded="false">
+                  <svg class="button-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true" stroke="currentColor"
+                    stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+                    <path
+                      d="M12 21a9 9 0 1 1 0-18c4.97 0 9 3.58 9 8 0 1.38-1.12 2.5-2.5 2.5h-1.61a1 1 0 0 0-.71.29 1 1 0 0 1-1.42 0A1 1 0 0 0 14 13.5H12a1 1 0 0 1 0-2h.01a1 1 0 1 0-.01 2h2c.55 0 1 .45 1 1 0 .55-.45 1-1 1h-2a3 3 0 1 1 0-6 3 3 0 0 1 0 6 3 3 0 0 1-3-3">
+                    </path>
+                  </svg>
+                  <span data-i18n="terminal.themeButton">主题</span>
+                </button>
+                <div id="termPalettePanel" class="terminal-theme-panel hidden"></div>
+              </div>
+              <button id="btnBackFromTerminal" class="button ghost terminal-theme-button" type="button"
+                data-i18n-aria-label="button.back">
+                <svg class="button-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true" stroke="currentColor"
+                  stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="15 18 9 12 15 6"></polyline>
+                </svg>
+                <span data-i18n="button.back">返回</span>
+              </button>
+              <button id="btnTermReconnect" class="button ghost terminal-theme-button" type="button"
+                data-i18n-aria-label="button.reconnect">
+                <svg class="button-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true" stroke="currentColor"
+                  stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M23 4v6h-6"></path>
+                  <path d="M1 20v-6h6"></path>
+                  <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+                </svg>
+                <span data-i18n="button.reconnect">重连</span>
+              </button>
+              <button id="btnTermDisconnect" class="button ghost danger terminal-theme-button" type="button"
+                data-i18n-aria-label="button.disconnect">
+                <svg class="button-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true" stroke="currentColor"
+                  stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M18.36 6.637a9 9 0 1 1-12.727 0"></path>
+                  <line x1="12" y1="2" x2="12" y2="12"></line>
+                </svg>
+                <span data-i18n="button.disconnect">断开</span>
+              </button>
+            </div>
+
+            <button id="btnLogout" class="button ghost danger icon-button hidden" type="button"
+              data-i18n-aria-label="button.logout">
+              <svg class="button-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true" stroke="currentColor"
+                stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                <polyline points="16 17 21 12 16 7"></polyline>
+                <line x1="21" y1="12" x2="9" y2="12"></line>
+              </svg>
+            </button>
+          </div>
         </div>
-      </div>
-      <div class="chrome-actions">
-        <span id="authBadge" class="chip">未登录</span>
-        <button id="btnThemeToggle" class="button ghost" type="button" aria-label="切换主题">切换主题</button>
       </div>
     </header>
 
     <main class="stage">
       <section id="loginView" class="view">
-        <div class="login-layout">
-          <section class="hero-card panel">
-            <span class="eyebrow">Release Console</span>
-            <h1>把本地机器变成可靠的远端执行节点。</h1>
-            <p class="lede">
-              管理在线 runner、启动 agent session、进入终端，并为上线环境提供更清晰的状态反馈和更稳的移动端体验。
-            </p>
-            <div class="hero-points">
-              <article class="hero-point">
-                <strong>Runner inventory</strong>
-                <span>统一查看在线状态、支持工具、最后心跳和会话负载。</span>
-              </article>
-              <article class="hero-point">
-                <strong>Session launch</strong>
-                <span>直接创建 Codex / Claude / Gemini 会话，减少上下文切换。</span>
-              </article>
-              <article class="hero-point">
-                <strong>Mobile terminal</strong>
-                <span>重连、快捷键、软键盘适配和重要状态回执都放在手边。</span>
-              </article>
-            </div>
-          </section>
-
-          <section class="login-card panel">
-            <div class="section-head">
-              <div>
-                <span class="eyebrow">Sign In</span>
-                <h2>登录控制台</h2>
-              </div>
-              <p class="section-copy">登录后可查看 runner、创建会话并进入浏览器终端。</p>
+        <div class="login-shell">
+          <section class="panel login-card">
+            <div class="login-card-head">
+              <h1 data-i18n="login.title" style="text-align: center;">AgentMesh</h1>
             </div>
 
             <form id="loginForm" class="form-grid">
               <label class="field">
-                <span>用户名</span>
-                <input id="authUser" autocomplete="username" value="admin" />
+                <span data-i18n="field.username">用户名</span>
+                <input id="authUser" autocomplete="username" value="admin"
+                  data-i18n-placeholder="placeholder.username" />
               </label>
 
               <label class="field">
-                <span>密码</span>
-                <input
-                  id="authPassword"
-                  type="password"
-                  autocomplete="current-password"
-                  placeholder="输入网关密码"
-                />
+                <span data-i18n="field.password">密码</span>
+                <input id="authPassword" type="password" autocomplete="current-password"
+                  data-i18n-placeholder="placeholder.password" />
               </label>
 
               <label id="authTotpField" class="field hidden">
-                <span>动态码</span>
-                <input
-                  id="authTotp"
-                  inputmode="numeric"
-                  autocomplete="one-time-code"
-                  placeholder="输入 6 位动态码"
-                />
+                <span data-i18n="field.totp">动态码</span>
+                <input id="authTotp" inputmode="numeric" autocomplete="one-time-code" maxlength="6"
+                  data-i18n-placeholder="placeholder.totp" />
               </label>
 
-              <button id="btnLogin" class="button primary submit-button" type="submit">登录</button>
+              <button id="btnLogin" class="button primary submit-button" type="submit"
+                data-i18n="button.login">登录</button>
             </form>
 
             <div id="loginError" class="inline-feedback error" role="status" aria-live="polite"></div>
+
+            <div id="loginFootnote" class="login-footnote hidden">
+              <span class="inline-tag">网关</span>
+              <span data-i18n="login.footnote">如已启用 TOTP，下一步会要求输入 6 位动态码。</span>
+            </div>
           </section>
         </div>
       </section>
 
       <section id="workspaceView" class="view hidden">
         <div class="view-stack">
-          <section class="panel masthead">
-            <div>
-              <span class="eyebrow">Runner Fleet</span>
-              <h2>控制台总览</h2>
-              <p id="runnerSummaryText" class="section-copy">-</p>
-            </div>
-            <div class="action-row">
-              <button id="btnOpenSettings" class="button ghost" type="button">设置</button>
-              <button id="btnRefreshRunners" class="button ghost" type="button">刷新</button>
-              <button id="btnLogout" class="button ghost danger" type="button">退出</button>
-            </div>
-          </section>
-
-          <section id="riskBanner" class="panel alert-banner hidden">
-            <div>
-              <div id="riskBannerTitle" class="alert-title">安全提醒</div>
-              <div id="riskBannerBody" class="section-copy">-</div>
-            </div>
-            <button id="btnRiskAction" class="button primary" type="button">立即处理</button>
-          </section>
-
-          <section class="summary-grid">
-            <article class="summary-tile panel">
-              <span class="summary-label">在线 Runner</span>
+          <section class="stats-strip">
+            <article class="summary-tile">
+              <span class="summary-label" data-i18n="stats.onlineRunners">在线节点</span>
               <strong id="statOnline">0</strong>
-              <span class="summary-meta">当前可立即接受任务的节点</span>
+              <span class="summary-meta" data-i18n="stats.onlineRunnersMeta">当前可接收任务的节点</span>
             </article>
-            <article class="summary-tile panel">
-              <span class="summary-label">离线 Runner</span>
+            <article class="summary-tile">
+              <span class="summary-label" data-i18n="stats.offlineRunners">离线节点</span>
               <strong id="statOffline">0</strong>
-              <span class="summary-meta">需要排查网络、服务或机器状态</span>
+              <span class="summary-meta" data-i18n="stats.offlineRunnersMeta">需要排查网络、服务或机器状态的节点</span>
             </article>
-            <article class="summary-tile panel">
-              <span class="summary-label">总会话数</span>
+            <article class="summary-tile">
+              <span class="summary-label" data-i18n="stats.totalSessions">总会话数</span>
               <strong id="statSessions">0</strong>
-              <span class="summary-meta">基于当前 runner 数据实时聚合</span>
+              <span class="summary-meta" data-i18n="stats.totalSessionsMeta">当前网关可见的所有会话</span>
             </article>
-            <article class="summary-tile panel">
-              <span class="summary-label">活跃会话</span>
+            <article class="summary-tile">
+              <span class="summary-label" data-i18n="stats.activeSessions">活跃会话</span>
               <strong id="statActiveSessions">0</strong>
-              <span class="summary-meta">running / starting / stopping</span>
+              <span class="summary-meta" data-i18n="stats.activeSessionsMeta">运行中 / 启动中 / 停止中</span>
             </article>
           </section>
 
-          <section class="panel filter-panel">
-            <div class="section-head compact">
-              <div>
-                <h3>Runner 列表</h3>
-                <p class="section-copy">搜索名称、runnerId、支持工具或在线状态。</p>
-              </div>
-              <div id="cleanupResult" class="inline-feedback" role="status" aria-live="polite"></div>
+          <section class="runner-list-head">
+            <div>
+              <h2 data-i18n="workspace.runnerListTitle">节点列表</h2>
+              <p class="section-copy" data-i18n="workspace.runnerListCopy">当前网关可见的所有节点，按在线状态和最近心跳排序。</p>
             </div>
-            <label class="field">
-              <span>筛选 Runner</span>
-              <input id="runnerSearch" placeholder="例如 mac-mini / codex / online" />
-            </label>
+            <div id="cleanupResult" class="inline-feedback" role="status" aria-live="polite"></div>
           </section>
 
           <main id="runnerList" class="runner-grid"></main>
@@ -176,39 +352,31 @@
 
       <section id="settingsView" class="view hidden">
         <div class="view-stack">
-          <section class="panel masthead">
-            <div>
-              <span class="eyebrow">Security</span>
-              <h2>发布设置</h2>
-              <p id="settingsSub" class="section-copy">-</p>
-            </div>
-            <div class="action-row">
-              <button id="btnBackFromSettings" class="button ghost" type="button">返回控制台</button>
-            </div>
-          </section>
-
           <div class="settings-grid">
             <section class="panel detail-card">
               <div class="section-head compact">
                 <div>
-                  <h3>账号与密码</h3>
-                  <p class="section-copy">修改控制台登录身份。保存后会强制重新登录。</p>
+                  <h3 data-i18n="settings.authTitle">账号与密码</h3>
+                  <p class="section-copy" data-i18n="settings.authCopy">
+                    修改控制台登录身份。保存后当前会话会被强制登出。
+                  </p>
                 </div>
               </div>
               <div class="form-grid">
                 <label class="field">
-                  <span>新用户名</span>
-                  <input id="setNewUser" placeholder="留空表示不修改" />
+                  <span data-i18n="settings.newUser">新用户名</span>
+                  <input id="setNewUser" data-i18n-placeholder="placeholder.newUser" />
                 </label>
                 <label class="field">
-                  <span>新密码</span>
-                  <input id="setNewPassword" type="password" placeholder="留空表示不修改" />
+                  <span data-i18n="settings.newPassword">新密码</span>
+                  <input id="setNewPassword" type="password" data-i18n-placeholder="placeholder.newPassword" />
                 </label>
                 <label class="field">
-                  <span>当前密码</span>
-                  <input id="setOldPassword" type="password" placeholder="用于确认身份" />
+                  <span data-i18n="settings.currentPassword">当前密码</span>
+                  <input id="setOldPassword" type="password" data-i18n-placeholder="placeholder.currentPassword" />
                 </label>
-                <button id="btnSaveAuth" class="button primary" type="button">保存并重新登录</button>
+                <button id="btnSaveAuth" class="button primary" type="button"
+                  data-i18n="button.saveAndRelogin">保存并重新登录</button>
                 <div id="saveAuthResult" class="inline-feedback" role="status" aria-live="polite"></div>
               </div>
             </section>
@@ -216,14 +384,18 @@
             <section class="panel detail-card">
               <div class="section-head compact">
                 <div>
-                  <h3>两步验证</h3>
-                  <p class="section-copy">建议上线前强制启用，降低弱口令和会话泄漏风险。</p>
+                  <h3 data-i18n="settings.totpTitle">两步验证</h3>
+                  <p class="section-copy" data-i18n="settings.totpCopy">
+                    建议在对外暴露控制台之前完成 TOTP 绑定。
+                  </p>
                 </div>
               </div>
               <div id="totpStatus" class="status-note">-</div>
               <div class="action-row wrap">
-                <button id="btnTotpEnable" class="button primary" type="button">前往绑定</button>
-                <button id="btnTotpDisable" class="button ghost danger hidden" type="button">删除两步验证</button>
+                <button id="btnTotpEnable" class="button primary" type="button"
+                  data-i18n="button.configureTotp">前往绑定</button>
+                <button id="btnTotpDisable" class="button ghost danger hidden" type="button"
+                  data-i18n="button.removeTotp">删除两步验证</button>
               </div>
               <div id="totpActionResult" class="inline-feedback" role="status" aria-live="polite"></div>
             </section>
@@ -233,45 +405,29 @@
 
       <section id="runnerDetailView" class="view hidden">
         <div class="view-stack">
-          <section class="panel masthead">
-            <div>
-              <span class="eyebrow">Runner Detail</span>
-              <h2 id="detailRunnerTitle">Runner</h2>
-              <p id="detailRunnerSub" class="section-copy">-</p>
-            </div>
-            <div class="action-row">
-              <button id="btnBackToRunners" class="button ghost" type="button">返回列表</button>
-              <button id="btnRefreshDetail" class="button ghost" type="button">刷新详情</button>
-            </div>
-          </section>
-
           <div class="detail-layout">
-            <section class="panel detail-card detail-overview">
+            <section class="panel detail-card detail-overview detail-block">
               <div class="section-head compact">
                 <div>
-                  <h3>Runner 能力</h3>
-                  <p id="detailCapabilitySummary" class="section-copy">查看工具可用性、最近心跳和启动建议。</p>
+                  <h3 data-i18n="detail.capabilitiesTitle">节点能力</h3>
                 </div>
               </div>
               <div id="detailTools" class="badge-row"></div>
-              <div id="detailToolHint" class="status-note hidden"></div>
               <div id="detailMetrics" class="meta-grid"></div>
-              <details class="raw-capabilities">
-                <summary>查看原始能力载荷</summary>
-                <pre id="detailCapabilities"></pre>
-              </details>
             </section>
 
-            <section class="panel detail-card">
+            <section class="panel detail-card detail-block">
               <div class="section-head compact">
                 <div>
-                  <h3>新建会话</h3>
-                  <p class="section-copy">选择 CLI agent、工作目录和项目别名，立即为当前 runner 创建新会话。</p>
+                  <h3 data-i18n="detail.newSessionTitle">新建会话</h3>
+                  <p class="section-copy" data-i18n="detail.newSessionCopy">
+                    为当前节点选择 CLI 工具、工作目录和项目别名，然后直接进入终端。
+                  </p>
                 </div>
               </div>
-              <div class="form-grid">
+              <div class="form-grid detail-form-grid">
                 <label class="field">
-                  <span>CLI Agent</span>
+                  <span data-i18n="detail.cliAgent">CLI 工具</span>
                   <select id="newSessionTool">
                     <option value="codex">codex</option>
                     <option value="claude">claude</option>
@@ -279,14 +435,17 @@
                   </select>
                 </label>
                 <label class="field">
-                  <span>project path</span>
-                  <input id="newSessionPath" placeholder="留空时使用 runner 默认工作目录" />
+                  <span data-i18n="detail.projectPath">项目路径</span>
+                  <select id="newSessionPath">
+                    <option value="" data-i18n="detail.projectPathDefault">默认工作目录</option>
+                  </select>
                 </label>
                 <label class="field">
-                  <span>project name</span>
-                  <input id="newSessionProjectName" placeholder="例如 my-workspace" />
+                  <span data-i18n="detail.projectName">项目名称</span>
+                  <input id="newSessionProjectName" data-i18n-placeholder="placeholder.projectName" />
                 </label>
-                <button id="btnCreateSession" class="button primary" type="button">创建并进入 Terminal</button>
+                <button id="btnCreateSession" class="button primary" type="button"
+                  data-i18n="button.createAndOpenTerminal">创建并进入终端</button>
                 <div id="createSessionResult" class="inline-feedback" role="status" aria-live="polite"></div>
               </div>
             </section>
@@ -295,14 +454,10 @@
           <section class="panel detail-card">
             <div class="section-head compact">
               <div>
-                <h3>会话列表</h3>
+                <h3 data-i18n="detail.sessionListTitle">会话列表</h3>
                 <p id="detailSessionSummary" class="section-copy">-</p>
               </div>
             </div>
-            <label class="field">
-              <span>筛选会话</span>
-              <input id="sessionSearch" placeholder="按 sessionId、tool、status、path 搜索" />
-            </label>
             <div id="detailSessionList" class="session-list"></div>
           </section>
         </div>
@@ -310,54 +465,31 @@
 
       <section id="terminalView" class="view hidden">
         <div class="terminal-shell">
-          <header class="panel terminal-topbar">
-            <div class="terminal-copy">
-              <span class="eyebrow">Terminal</span>
-              <h2 id="termTitle">Session</h2>
-              <p id="termMeta" class="section-copy">session: -</p>
-            </div>
-            <div class="terminal-status-row">
-              <span id="termConn" class="chip state disconnected">未连接</span>
-              <span id="termCursor" class="chip subtle">光标 -:-</span>
-            </div>
-          </header>
-
-          <section class="panel terminal-panel">
+          <section class="panel terminal-panel terminal-workspace">
             <div id="termHost" class="term-host"></div>
-            <div class="terminal-support">
-              <p id="termHint" class="section-copy">
-                移动端提供 Ctrl / Alt 粘滞键、方向键长按连发和快速唤起软键盘。
-              </p>
-              <div class="terminal-action-row">
-                <button id="btnBackFromTerminal" class="button ghost" type="button">返回</button>
-                <button id="btnTermReconnect" class="button ghost" type="button">重连</button>
-                <button id="btnTermDisconnect" class="button ghost danger" type="button">断开</button>
-              </div>
-            </div>
 
-            <div id="termMobileKeys" class="term-mobile-keys" aria-label="终端快捷键">
-              <div class="term-mobile-group" aria-label="修饰键">
-                <button class="button ghost" data-term-key="ctrl" data-mod="ctrl" aria-pressed="false" type="button">Ctrl</button>
-                <button class="button ghost" data-term-key="alt" data-mod="alt" aria-pressed="false" type="button">Alt</button>
-                <button class="button ghost" data-term-key="esc" type="button">Esc</button>
-                <button class="button ghost" data-term-key="tab" type="button">Tab</button>
-                <button class="button ghost" data-term-key="enter" type="button">Enter</button>
-                <button class="button ghost" data-term-key="backspace" type="button">⌫</button>
-              </div>
-              <div class="term-mobile-group" aria-label="导航键">
-                <button class="button ghost" data-term-key="home" type="button">Home</button>
-                <button class="button ghost" data-term-key="end" type="button">End</button>
-                <button class="button ghost" data-term-key="pgup" type="button">PgUp</button>
-                <button class="button ghost" data-term-key="pgdn" type="button">PgDn</button>
-                <button class="button ghost" data-term-key="keyboard" type="button">键盘</button>
-              </div>
-              <div class="term-mobile-group" aria-label="会话操作">
-                <button class="button ghost" data-term-key="ctrlc" type="button">Ctrl+C</button>
-                <button class="button ghost" data-term-key="ctrld" type="button">Ctrl+D</button>
-                <button class="button ghost" data-term-key="left" type="button">←</button>
-                <button class="button ghost" data-term-key="up" type="button">↑</button>
-                <button class="button ghost" data-term-key="down" type="button">↓</button>
-                <button class="button ghost" data-term-key="right" type="button">→</button>
+            <div id="termMobileKeys" class="term-mobile-keys" data-i18n-aria-label="terminal.mobileKeys">
+              <p id="termHint" class="section-copy" data-i18n="terminal.hint">
+                移动端支持 Ctrl / Alt 锁定键、方向键长按连发，以及快速唤起软键盘。
+              </p>
+              <div class="term-mobile-dock" data-i18n-aria-label="terminal.sessionActionsGroup">
+                <button class="button ghost term-mobile-btn" data-term-key="ctrl" data-mod="ctrl" aria-pressed="false"
+                  type="button">Ctrl</button>
+                <button class="button ghost term-mobile-btn" data-term-key="alt" data-mod="alt" aria-pressed="false"
+                  type="button">Alt</button>
+                <button class="button ghost term-mobile-btn" data-term-key="esc" type="button">Esc</button>
+                <button class="button ghost term-mobile-btn" data-term-key="tab" type="button">Tab</button>
+                <button class="button ghost term-mobile-btn" data-term-key="ctrlc" type="button">Ctrl+C</button>
+                <button class="button ghost term-mobile-btn" data-term-key="ctrld" type="button">Ctrl+D</button>
+                <button class="button ghost term-mobile-btn" data-term-key="keyboard" type="button"
+                  data-i18n="terminal.keyboard">键盘</button>
+                <button class="button ghost term-mobile-btn" data-term-key="left" type="button">←</button>
+                <button class="button ghost term-mobile-btn" data-term-key="down" type="button">↓</button>
+                <button class="button ghost term-mobile-btn" data-term-key="up" type="button">↑</button>
+                <button class="button ghost term-mobile-btn" data-term-key="right" type="button">→</button>
+                <button class="button ghost term-mobile-btn" data-term-key="enter" type="button">Enter</button>
+                <button class="button ghost term-mobile-btn term-mobile-wide" data-term-key="backspace"
+                  type="button">⌫</button>
               </div>
             </div>
           </section>
@@ -370,14 +502,14 @@
     <div class="modal-card panel">
       <div class="section-head compact">
         <div>
-          <h3 id="modalTitle">提示</h3>
+          <h3 id="modalTitle" data-i18n="modal.title">提示</h3>
           <p id="modalBody" class="section-copy"></p>
         </div>
       </div>
       <div id="modalFields" class="form-grid"></div>
       <div class="action-row end">
-        <button id="modalCancel" class="button ghost" type="button">取消</button>
-        <button id="modalOk" class="button primary" type="button">确认</button>
+        <button id="modalCancel" class="button ghost" type="button" data-i18n="button.cancel">取消</button>
+        <button id="modalOk" class="button primary" type="button" data-i18n="button.confirm">确认</button>
       </div>
     </div>
   </div>
@@ -386,4 +518,5 @@
   <script src="/assets/xterm/xterm-addon-fit.js"></script>
   <script type="module" src="/assets/ui/app.js"></script>
 </body>
+
 </html>

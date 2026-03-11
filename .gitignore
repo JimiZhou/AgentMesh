@@ -5,5 +5,3 @@ node_modules
 gateway/data/config.json
 gateway/data/state.json
 runner/data/identity.json
-gateway/dist/
-runner/dist/

@@ -1,0 +1,15 @@
+services:
+  gateway:
+    build:
+      context: ./gateway
+      dockerfile: Dockerfile
+    ports:
+      - "8787:8787"
+    volumes:
+      # Persist config.json + state.json between container restarts
+      - ./gateway/data:/app/data
+    environment:
+      # Required on first boot. After the password hash is stored in data/config.json
+      # you can remove this variable.
+      AGENTMESH_BOOTSTRAP_PASSWORD: ${AGENTMESH_BOOTSTRAP_PASSWORD:?Please set AGENTMESH_BOOTSTRAP_PASSWORD in your environment or a .env file}
+    restart: unless-stopped

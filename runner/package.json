@@ -1,13 +1,30 @@
 {
   "name": "agentmesh-runner",
   "version": "0.1.0",
-  "private": true,
+  "description": "Runner client for AgentMesh – connects your machine to an AgentMesh gateway to run Codex, Claude, and Gemini sessions via browser.",
+  "keywords": ["agentmesh", "ai", "agent", "codex", "claude", "gemini", "runner"],
+  "homepage": "https://github.com/JimiZhou/AgentMesh#readme",
+  "bugs": { "url": "https://github.com/JimiZhou/AgentMesh/issues" },
+  "repository": { "type": "git", "url": "git+https://github.com/JimiZhou/AgentMesh.git" },
+  "license": "MIT",
   "type": "module",
   "main": "dist/index.js",
+  "bin": {
+    "agentmesh-runner": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "scripts": {
     "dev": "node --watch --enable-source-maps --loader ts-node/esm src/index.ts",
+    "dev:cli": "node --enable-source-maps --loader ts-node/esm src/cli.ts",
     "build": "tsc -p tsconfig.json",
-    "start": "node dist/index.js"
+    "start": "node dist/index.js",
+    "start:cli": "node dist/cli.js"
+  },
+  "engines": {
+    "node": ">=22"
   },
   "dependencies": {
     "node-pty": "^1.0.0",

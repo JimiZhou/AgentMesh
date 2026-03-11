@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: agentmesh-gateway
+    runtime: docker
+    dockerfilePath: ./gateway/Dockerfile
+    dockerContext: ./gateway
+    plan: free
+    envVars:
+      - key: AGENTMESH_BOOTSTRAP_PASSWORD
+        generateValue: false
+        sync: false
+    disk:
+      name: agentmesh-data
+      mountPath: /app/data
+      sizeGB: 1
+    healthCheckPath: /health

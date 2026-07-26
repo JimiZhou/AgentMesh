@@ -15,10 +15,10 @@ export function parseEnvToggle(raw) {
 function shellQuoteSingle(raw) {
     return `'${String(raw || '').replace(/'/g, `'\\''`)}'`;
 }
-export function extractPrimaryCommand(rawCommand) {
-    const raw = String(rawCommand || '').trim();
+export function splitCommand(commandLine) {
+    const raw = String(commandLine || '').trim();
     if (!raw)
-        return '';
+        return [];
     const tokens = [];
     let current = '';
     let quote = '';
@@ -57,6 +57,10 @@ export function extractPrimaryCommand(rawCommand) {
     }
     if (current)
         tokens.push(current);
+    return tokens;
+}
+export function extractPrimaryCommand(rawCommand) {
+    const tokens = splitCommand(rawCommand);
     for (const token of tokens) {
         if (/^[A-Za-z_][A-Za-z0-9_]*=.*/.test(token))
             continue;
@@ -102,32 +106,39 @@ export function resolveToolCommands(env = process.env, commandExistsFn = command
     const claudeEnv = String(env.AGENTMESH_CLAUDE_CMD || '').trim();
     const geminiEnv = String(env.AGENTMESH_GEMINI_CMD || '').trim();
     const codex = codexEnv
-        ? { command: codexEnv, source: 'env' }
-        : { command: 'codex', source: 'default' };
+        ? { command: codexEnv, source: 'env', protocol: 'acp' }
+        : commandExistsFn('codex-acp')
+            ? { command: 'codex-acp', source: 'default', protocol: 'acp' }
+            : {
+                command: 'npx -y @zed-industries/codex-acp',
+                source: 'fallback',
+                protocol: 'acp',
+                note: 'using npm ACP adapter for Codex',
+            };
     const claude = claudeEnv
-        ? { command: claudeEnv, source: 'env' }
-        : { command: 'claude', source: 'default' };
-    let gemini;
-    if (geminiEnv) {
-        gemini = { command: geminiEnv, source: 'env' };
-    }
-    else if (commandExistsFn('gemini')) {
-        gemini = { command: 'gemini', source: 'default' };
-    }
-    else if (commandExistsFn('npx')) {
-        gemini = {
-            command: 'npx -y @google/gemini-cli',
-            source: 'fallback',
-            note: 'gemini binary not found; using npx @google/gemini-cli fallback',
-        };
-    }
-    else {
-        gemini = {
-            command: 'gemini',
-            source: 'default',
-            note: 'gemini binary not found and npx is unavailable',
-        };
-    }
+        ? { command: claudeEnv, source: 'env', protocol: 'acp' }
+        : commandExistsFn('claude-agent-acp')
+            ? { command: 'claude-agent-acp', source: 'default', protocol: 'acp' }
+            : {
+                command: 'npx -y @zed-industries/claude-agent-acp',
+                source: 'fallback',
+                protocol: 'acp',
+                note: 'using npm ACP adapter for Claude Agent',
+            };
+    const gemini = geminiEnv
+        ? { command: geminiEnv, source: 'env', protocol: 'acp' }
+        : commandExistsFn('gemini')
+            ? {
+                command: 'gemini --experimental-acp',
+                source: 'default',
+                protocol: 'acp',
+            }
+            : {
+                command: 'npx -y @google/gemini-cli --experimental-acp',
+                source: 'fallback',
+                protocol: 'acp',
+                note: 'using npm Gemini CLI in ACP mode',
+            };
     return { codex, claude, gemini };
 }
 export function supportedToolsFrom(availability) {
@@ -138,33 +149,6 @@ export function supportedToolsFrom(availability) {
     }
     return out;
 }
-export function applySessionBackendConstraints(detected, requirements) {
-    if (requirements.tmuxAvailable)
-        return detected;
-    const tools = { ...detected.tools };
-    const toolDetails = { ...detected.toolDetails };
-    for (const tool of TOOL_ORDER) {
-        tools[tool] = false;
-        const detail = toolDetails[tool];
-        const baseReason = detail.reason ? `${detail.reason}; ` : '';
-        toolDetails[tool] = {
-            ...detail,
-            available: false,
-            reason: `${baseReason}tmux is required on the runner host`,
-        };
-    }
-    const unsupported = TOOL_ORDER.map((tool) => ({
-        tool,
-        source: toolDetails[tool].source,
-        command: toolDetails[tool].command,
-        reason: toolDetails[tool].reason || 'unavailable',
-    }));
-    return {
-        tools,
-        toolDetails,
-        unsupported,
-    };
-}
 export function detectToolCapabilities(toolCommands, env = process.env, commandExistsFn = commandExists) {
     const tools = {};
     const toolDetails = {};
@@ -174,6 +158,7 @@ export function detectToolCapabilities(toolCommands, env = process.env, commandE
         toolDetails[tool] = {
             command: commandSpec.command,
             source: commandSpec.source,
+            protocol: 'acp',
             available: availability.available,
             reason: availability.reason || commandSpec.note,
         };

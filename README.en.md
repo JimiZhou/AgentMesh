@@ -1,24 +1,27 @@
 # AgentMesh
 
-**Run Codex, Claude Code, and Gemini CLI from your browser — on any machine you own.**
+> 中文版：[切换到 README.md](README.md)
 
-AgentMesh bridges the gap between powerful local AI coding agents and the convenience of a web interface. Deploy a lightweight gateway server, then connect any number of runner machines to it. Each runner exposes its local tools (Codex, Claude, Gemini) through a full-featured browser terminal with real PTY passthrough — no SSH, no VNC, no compromise on UX.
+**Run Codex, Claude Agent, and Gemini on any machine you own — from your browser, re-rendered as a native ACP session stream.**
+
+AgentMesh brings powerful local AI coding agents into the browser. Deploy a lightweight gateway server, then connect any number of runner machines. Each runner acts as a local ACP client for the agents on that machine, converting `session/update`, tool calls, command output, and permission requests into structured events that the web UI re-renders into a mobile-friendly PWA experience. No SSH, no VNC.
 
 ```
 Browser ──HTTPS──▶ Gateway ──WebSocket──▶ Runner (your Mac/Linux/server)
-                                              └─▶ Codex / Claude / Gemini TUI
+                                              └─▶ ACP agent (Codex / Claude / Gemini)
 ```
 
 ---
 
 ## ✨ Features
 
-- **Full PTY passthrough** — ANSI colors, cursor keys, TUI apps (Codex full-screen UI works as-is)
-- **Outbound-only runner connections** — runners dial out to the gateway over WebSocket; no inbound ports needed, works behind NAT/firewalls/VPNs
-- **Multi-runner fleet** — connect as many machines as you want, pick the runner from the web UI
-- **Secure by default** — password + TOTP (Google Authenticator) login, scrypt-hashed credentials, per-session terminal tokens, CSRF protection
-- **Tool auto-detection** — runner automatically reports which of `codex`, `claude`, `gemini` are installed
-- **One-line runner join** — enroll new machines with a single `npx` command
+- **ACP-native session stream** — messages, plans, tool calls, command output, and permission requests are all transported as structured events
+- **Mobile-first re-rendering** — no more squeezing a desktop TUI onto a phone screen; the PWA experience stays stable
+- **Outbound-only runners** — runners dial out to the gateway over WebSocket, so no inbound ports are needed; works behind NAT, firewalls, and corporate networks
+- **Multi-runner support** — connect any number of machines and switch between them in the web UI
+- **Secure by default** — password + TOTP (Google Authenticator) two-factor login, scrypt password hashing, per-session terminal tokens, CSRF protection
+- **Automatic tool discovery** — runners report available ACP agents; `codex`, `claude`, and `gemini` are supported out of the box
+- **One-command enrollment** — register a new machine as a runner with a single `npx` command
 
 ---
 
@@ -27,19 +30,18 @@ Browser ──HTTPS──▶ Gateway ──WebSocket──▶ Runner (your Mac/L
 ### Option 1 — Docker (recommended for self-hosting)
 
 ```bash
-# Clone and start with a strong bootstrap password
 git clone https://github.com/JimiZhou/AgentMesh.git
 cd AgentMesh
 AGENTMESH_BOOTSTRAP_PASSWORD='your-strong-password' docker compose up -d
 ```
 
-Gateway will be available at `http://localhost:8787`.
+Then open `http://localhost:8787`.
 
-> On first boot the password is hashed and persisted — you can remove the env var afterwards.  
-> Put a reverse proxy (nginx, Caddy, Cloudflare Tunnel…) in front for HTTPS.
+> After first startup the password is hashed and persisted, so you can drop the environment variable afterwards.
+> For production, put a reverse proxy (nginx, Caddy, Cloudflare Tunnel, …) in front to terminate HTTPS.
 
 ```bash
-# Build & run manually
+# Manual build & run
 docker build -t agentmesh-gateway ./gateway
 docker run -d \
   -p 8787:8787 \
@@ -55,19 +57,19 @@ docker run -d \
 [![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/new/template?template=https://github.com/JimiZhou/AgentMesh)
 
 1. Click **Deploy on Railway**
-2. Set the `AGENTMESH_BOOTSTRAP_PASSWORD` environment variable to a strong password
-3. Copy the public URL Railway assigns, then set it as the gateway URL in Settings → Public URLs
+2. Set the `AGENTMESH_BOOTSTRAP_PASSWORD` environment variable
+3. Copy the public URL Railway assigns and paste it into Gateway Settings → Public URLs
 
 ### Option 3 — Render
 
 [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/JimiZhou/AgentMesh)
 
-1. Click **Deploy to Render**, follow the wizard, set `AGENTMESH_BOOTSTRAP_PASSWORD`
-2. Render attaches a 1 GB persistent disk at `/app/data` for config/state
+1. Click **Deploy to Render**, follow the wizard, and fill in `AGENTMESH_BOOTSTRAP_PASSWORD`
+2. Render automatically mounts a 1 GB persistent disk at `/app/data`
 
 ### Option 4 — Bare Node.js
 
-Requirements: **Node.js 22+**
+Requires **Node.js 22+**.
 
 ```bash
 git clone https://github.com/JimiZhou/AgentMesh.git
@@ -82,22 +84,26 @@ AGENTMESH_BOOTSTRAP_PASSWORD='your-strong-password' npm --prefix gateway run sta
 
 ## ⚡ Connect a Runner
 
-Requirements: **Node.js 22+**, **tmux 3+**, and at least one of: `codex`, `claude`, `gemini` in your `PATH`.
+Requires **Node.js 22+** and at least one usable ACP agent. Supported out of the box:
 
-### Step 1 — Generate an enroll code
+- `codex-acp`, or `npx -y @zed-industries/codex-acp`
+- `claude-agent-acp`, or `npx -y @zed-industries/claude-agent-acp`
+- `gemini --experimental-acp`, or `npx -y @google/gemini-cli --experimental-acp`
 
-Log in to your gateway UI → click a runner (or add a new one) → **Generate Enroll Code**.  
-The code encodes the gateway URL and a one-time token valid for 10 minutes.
+### Step 1 — Generate an enrollment code
 
-### Step 2 — Join with npx (no install needed)
+Log into the gateway web UI → click a runner (or create one) → **Generate enrollment code**.
+The code embeds the gateway URL and a one-time token valid for 10 minutes.
+
+### Step 2 — Enroll with npx (no global install)
 
 ```bash
-npx agentmesh-runner --gateway https://your-gateway.example.com --enroll eyJ...YOUR_CODE...
+npx agentmesh-runner --gateway https://your-gateway.example.com --enroll eyJ...your-code...
 ```
 
-That's it. The runner will enroll, save its identity, and stay connected. On restart, it reconnects automatically — no need to re-enroll.
+Done. The runner registers itself, stores its identity credentials, and keeps a persistent connection. It reconnects automatically after restarts — no re-enrollment needed.
 
-### Re-connecting after first enrollment
+### Reconnect after a restart (already enrolled)
 
 ```bash
 npx agentmesh-runner --gateway https://your-gateway.example.com
@@ -105,18 +111,18 @@ npx agentmesh-runner --gateway https://your-gateway.example.com
 
 ### Optional flags
 
-| Flag | Env var | Default | Description |
+| Flag | Environment variable | Default | Description |
 |---|---|---|---|
-| `--gateway <url>` | `AGENTMESH_GATEWAY_HTTP` | `http://127.0.0.1:8787` | Gateway HTTP URL |
-| `--enroll <code>` | `AGENTMESH_ENROLL_CODE` | — | One-time enroll code |
+| `--gateway <url>` | `AGENTMESH_GATEWAY_HTTP` | `http://127.0.0.1:8787` | Gateway HTTP address |
+| `--enroll <code>` | `AGENTMESH_ENROLL_CODE` | — | One-time enrollment code |
 | `--name <name>` | `AGENTMESH_RUNNER_NAME` | hostname | Runner display name |
 | `--debug` | `AGENTMESH_RUNNER_DEBUG=1` | off | Verbose logging |
 
-### Tool overrides (runner)
+### Tool environment variables (runner side)
 
 ```bash
-# Force-enable or disable specific tools
-AGENTMESH_TOOL_CODEX=1  # or 0
+# Force-enable or disable a tool
+AGENTMESH_TOOL_CODEX=1   # or 0
 AGENTMESH_TOOL_CLAUDE=1
 AGENTMESH_TOOL_GEMINI=1
 
@@ -130,29 +136,29 @@ AGENTMESH_GEMINI_CMD=gemini
 
 ## 🔒 Security
 
-- Passwords stored as `scrypt` hashes — plaintext is never persisted
-- TOTP (Google Authenticator) two-factor auth — configure under **Settings → TOTP**
-- Per-session terminal tokens — terminal WebSocket requires a one-time grant tied to your login session
-- CSRF protection on all write APIs
+- Passwords are stored as `scrypt` hashes — plaintext never touches disk
+- TOTP two-factor authentication (Google Authenticator), configurable under **Settings → TOTP**
+- Every terminal connection requires a one-time authorization token bound to the login session
+- All mutating APIs are CSRF-protected
 - Runner tokens are long-lived credentials scoped to a single runner identity
 
-> **Important:** always run the gateway behind HTTPS in production. Runners communicate over WebSocket (wss://). The `AGENTMESH_TRUST_PROXY=1` flag enables correct IP/protocol detection when behind a reverse proxy.
+> **Important:** run behind HTTPS/WSS in production. When using a reverse proxy, set `AGENTMESH_TRUST_PROXY=1` so real client IPs and protocols are detected correctly.
 
 ---
 
-## 🛠️ Tool Support
+## 🛠️ Tool support
 
 | Tool | Auto-detected | How |
 |---|---|---|
-| Codex | ✅ | Checks for `codex` in PATH (or `AGENTMESH_CODEX_CMD`) |
-| Claude Code | ✅ | Checks for `claude` in PATH (or `AGENTMESH_CLAUDE_CMD`) |
-| Gemini CLI | ✅ | `gemini` → `npx -y @google/gemini-cli` fallback |
+| Codex | ✅ | Prefers `codex-acp`, falls back to `npx -y @zed-industries/codex-acp` |
+| Claude Agent | ✅ | Prefers `claude-agent-acp`, falls back to `npx -y @zed-industries/claude-agent-acp` |
+| Gemini CLI | ✅ | Prefers `gemini --experimental-acp`, falls back to `npx -y @google/gemini-cli --experimental-acp` |
 
-The runner reports its discovered capabilities to the gateway on connect. The web UI only shows tools actually available on the selected runner.
+Runners report their discovered ACP agent capabilities on connect; the web UI only shows tools that are actually available on the selected runner.
 
 ---
 
-## 📦 Repository Layout
+## 📦 Repository layout
 
 ```
 AgentMesh/
@@ -169,11 +175,11 @@ AgentMesh/
 ## 🧪 Development
 
 ```bash
-# Start gateway in dev mode (hot-reload)
+# Start the gateway in dev mode (hot reload)
 AGENTMESH_BOOTSTRAP_PASSWORD=dev npm --prefix gateway run dev
 
-# Start runner in dev mode
-AGENTMESH_ENROLL_CODE='<code>' npm --prefix runner run dev
+# Start a runner in dev mode
+AGENTMESH_ENROLL_CODE='<enrollment code>' npm --prefix runner run dev
 
 # Run tests (build first)
 npm --prefix gateway run build && npm --prefix runner run build

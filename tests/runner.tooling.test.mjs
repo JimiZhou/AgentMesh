@@ -3,7 +3,6 @@ import test from 'node:test';
 
 const toolingModuleUrl = new URL('../runner/dist/tooling.js', import.meta.url);
 const {
-  applySessionBackendConstraints,
   detectToolCapabilities,
   extractPrimaryCommand,
   resolveToolAvailability,
@@ -15,9 +14,9 @@ test('runner tooling resolves gemini to npx fallback when gemini binary is missi
   const exists = (cmd) => cmd === 'npx';
   const commands = resolveToolCommands(env, exists);
 
-  assert.equal(commands.gemini.command, 'npx -y @google/gemini-cli');
+  assert.equal(commands.gemini.command, 'npx -y @google/gemini-cli --experimental-acp');
   assert.equal(commands.gemini.source, 'fallback');
-  assert.match(String(commands.gemini.note || ''), /fallback/i);
+  assert.match(String(commands.gemini.note || ''), /acp mode/i);
 });
 
 test('runner tooling respects AGENTMESH_*_CMD overrides', () => {
@@ -70,20 +69,18 @@ test('runner tooling detection carries override reason into tool details', () =>
   assert.equal(detected.unsupported[0].tool, 'gemini');
 });
 
-test('runner tooling disables all tools when tmux backend is unavailable', () => {
+test('runner tooling keeps ACP tools enabled without any PTY backend dependency', () => {
   const commands = {
-    codex: { command: 'codex', source: 'default' },
-    claude: { command: 'claude', source: 'default' },
-    gemini: { command: 'gemini', source: 'default' },
+    codex: { command: 'codex-acp', source: 'default', protocol: 'acp' },
+    claude: { command: 'claude-agent-acp', source: 'default', protocol: 'acp' },
+    gemini: { command: 'gemini --experimental-acp', source: 'default', protocol: 'acp' },
   };
   const detected = detectToolCapabilities(commands, {}, () => true);
-  const constrained = applySessionBackendConstraints(detected, { tmuxAvailable: false });
 
-  assert.equal(constrained.tools.codex, false);
-  assert.equal(constrained.tools.claude, false);
-  assert.equal(constrained.tools.gemini, false);
-  assert.match(String(constrained.toolDetails.codex.reason || ''), /tmux is required/i);
-  assert.equal(constrained.unsupported.length, 3);
+  assert.equal(detected.tools.codex, true);
+  assert.equal(detected.tools.claude, true);
+  assert.equal(detected.tools.gemini, true);
+  assert.equal(detected.unsupported.length, 0);
 });
 
 test('runner tooling extracts command executable token from command strings with env and args', () => {

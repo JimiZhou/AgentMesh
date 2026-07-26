@@ -36,23 +36,45 @@ function deepMerge(base, patch) {
     }
     return out;
 }
-export function loadConfig(filePath) {
+function backupCorruptFile(filePath, err) {
+    const backupPath = `${filePath}.corrupt-${Date.now()}`;
     try {
-        const raw = fs.readFileSync(filePath, 'utf8');
+        fs.copyFileSync(filePath, backupPath);
+    }
+    catch {
+        // best effort backup
+    }
+    console.error(`[agentmesh] FAILED to load config at ${filePath}: ${err?.message || err}. ` +
+        `Corrupt file backed up to ${backupPath}; falling back to defaults.`);
+}
+export function loadConfig(filePath) {
+    let raw;
+    try {
+        raw = fs.readFileSync(filePath, 'utf8');
+    }
+    catch (err) {
+        if (err?.code !== 'ENOENT')
+            backupCorruptFile(filePath, err);
+        return { ...DEFAULT_CONFIG };
+    }
+    try {
         const parsed = JSON.parse(raw);
         return deepMerge(DEFAULT_CONFIG, parsed);
     }
-    catch {
+    catch (err) {
+        backupCorruptFile(filePath, err);
         return { ...DEFAULT_CONFIG };
     }
 }
 export function saveConfig(filePath, cfg) {
     fs.mkdirSync(path.dirname(filePath), { recursive: true });
-    fs.writeFileSync(filePath, JSON.stringify(cfg, null, 2), { mode: 0o600 });
+    const tmpPath = `${filePath}.tmp`;
+    fs.writeFileSync(tmpPath, JSON.stringify(cfg, null, 2), { mode: 0o600 });
     try {
-        fs.chmodSync(filePath, 0o600);
+        fs.chmodSync(tmpPath, 0o600);
     }
     catch {
         // ignore chmod errors on non-posix filesystems
     }
+    fs.renameSync(tmpPath, filePath);
 }

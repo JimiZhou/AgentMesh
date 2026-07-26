@@ -27,8 +27,9 @@
     "node": ">=22"
   },
   "dependencies": {
-    "node-pty": "^1.0.0",
-    "ws": "^8.18.3"
+    "@agentclientprotocol/sdk": "^0.16.1",
+    "ws": "^8.18.3",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",

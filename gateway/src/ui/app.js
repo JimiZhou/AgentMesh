@@ -43,14 +43,14 @@ const TOOL_ORDER = ['codex', 'claude', 'gemini'];
 
 const MESSAGES = {
   zh: {
-    'app.description': 'AgentMesh 控制台，用于连接远端网关、管理本地节点，并在浏览器中安全使用 Codex、Claude 和 Gemini CLI。',
+    'app.description': 'AgentMesh 控制台，用于连接远端网关、管理本地节点，并在浏览器中使用 ACP 会话流操作 Codex、Claude 和 Gemini。',
     'chrome.tagline': '远端节点控制台，用于管理 Codex、Claude 和 Gemini CLI',
     'chrome.language': '界面语言',
     'auth.signedOut': '未登录',
     'auth.signedIn': ({ user }) => `已登录 · ${user || '-'}`,
     'login.eyebrow': '网关在线',
     'login.title': 'AgentMesh',
-    'login.copy': '使用本机网关账号登录，统一管理节点、会话和终端连接。',
+    'login.copy': '使用本机网关账号登录，统一管理节点、会话和 ACP 工作流。',
     'login.footnote': '如已启用 TOTP，下一步会要求输入 6 位动态码。',
     'field.username': '用户名',
     'field.password': '密码',
@@ -78,25 +78,39 @@ const MESSAGES = {
     'button.removeTotp': '删除两步验证',
     'button.backToList': '返回列表',
     'button.refreshDetail': '刷新详情',
-    'button.createAndOpenTerminal': '创建并进入终端',
+    'button.createAndOpenTerminal': '创建并进入会话',
     'button.back': '返回',
     'button.reconnect': '重连',
     'button.disconnect': '断开',
     'button.confirm': '确认',
     'button.cancel': '取消',
     'button.viewDetails': '查看详情',
+    'button.startCoding': '开始 coding',
     'button.delete': '删除',
-    'button.openTerminal': '进入终端',
+    'button.openTerminal': '进入会话',
     'button.copyClaudeResume': '复制 Claude Resume 命令',
     'button.copyGeminiLaunch': '复制 Gemini 启动命令',
     'button.stop': '停止',
     'button.zoomIn': '放大',
     'button.zoomOut': '缩小',
     'workspace.eyebrow': '控制台',
-    'workspace.title': '控制台',
+    'workspace.title': '开始 coding',
+    'workspace.heroEyebrow': '开始',
+    'workspace.heroTitle': '登录后先选一个在线节点，然后直接开始 ACP coding。',
+    'workspace.heroBody': 'AgentMesh 会在所选节点上拉起会话，并把消息、计划、工具调用和文件变更连续渲染成可跟进的工作流。',
     'workspace.riskTitle': '安全提醒',
     'workspace.runnerListTitle': '节点列表',
-    'workspace.runnerListCopy': '当前网关可见的所有节点，按在线状态和最近心跳排序。',
+    'workspace.runnerListCopy': '优先选一个在线节点直接开工；详情配置和历史会话退到次一级。',
+    'workspace.recentTitle': '继续最近会话',
+    'workspace.recentCopy': '如果你刚刚中断过会话，可以从这里直接回到最近的 coding 流。',
+    'workspace.metric.online': '在线节点',
+    'workspace.metric.active': '活跃会话',
+    'workspace.metric.tools': 'ACP 工具',
+    'workspace.quickStart': '开始 coding',
+    'workspace.quickStartHint': '使用默认工具和节点默认工作目录立即开工',
+    'workspace.quickResume': '继续最近会话',
+    'workspace.openRunners': '查看节点',
+    'workspace.recentEmpty': '最近还没有会话，选一个在线节点开始第一轮。',
     'stats.onlineRunners': '在线节点',
     'stats.onlineRunnersMeta': '当前可接收任务的节点',
     'stats.offlineRunners': '离线节点',
@@ -118,14 +132,14 @@ const MESSAGES = {
     'detail.capabilitiesTitle': '节点能力',
     'detail.rawCapabilities': '查看原始能力载荷',
     'detail.newSessionTitle': '新建会话',
-    'detail.newSessionCopy': '为当前节点选择已探测可用的 CLI 工具、项目路径和项目名称，然后直接进入终端。',
+    'detail.newSessionCopy': '为当前节点选择已探测可用的 CLI 工具、项目路径和项目名称，然后直接进入 ACP 会话。',
     'detail.cliAgent': 'CLI 工具',
     'detail.projectPath': '项目路径',
     'detail.projectPathDefault': '默认工作目录',
     'detail.projectName': '项目名称',
     'detail.sessionListTitle': '会话列表',
     'detail.sessionSearchLabel': '筛选会话',
-    'terminal.eyebrow': '终端',
+    'terminal.eyebrow': 'ACP 会话',
     'terminal.disconnected': '未连接',
     'terminal.hint': '移动端支持 Ctrl / Alt 锁定键、方向键长按连发、双指缩放，以及快速唤起软键盘。',
     'terminal.mobileKeys': '终端快捷键',
@@ -146,6 +160,58 @@ const MESSAGES = {
     'terminal.paletteSolarizedLight': 'Solarized Light',
     'terminal.palettePaper': 'Paper',
     'terminal.paletteAmber': 'Amber',
+    'terminal.protocolLabel': '协议',
+    'terminal.connectionLabel': '连接',
+    'terminal.agentLabel': 'Agent',
+    'terminal.authLabel': '认证',
+    'terminal.authReady': '环境已就绪',
+    'terminal.workspaceTitle': '实时工作面',
+    'terminal.workspaceTurns': '轮次',
+    'terminal.workspaceTools': '工具调用',
+    'terminal.workspaceFiles': '最近文件',
+    'terminal.workspaceApprovals': '待处理授权',
+    'terminal.workspaceNoFiles': '本轮还没有文件变更',
+    'terminal.turnLabel': ({ index }) => `第 ${index} 轮`,
+    'terminal.turnMeta': ({ tools, files }) => `${tools} 次工具调用 · ${files} 个文件`,
+    'terminal.turnOpen': '展开本轮',
+    'terminal.sectionOutput': '命令输出',
+    'terminal.sectionDiff': '变更 diff',
+    'terminal.sectionContent': '结构化结果',
+    'terminal.sectionEmpty': '该工具这一步还没有可展示的结果。',
+    'terminal.linesUnit': ({ count }) => `${count} 行`,
+    'terminal.emptyEyebrow': '已连接',
+    'terminal.emptyTitle': '会话已经就绪，下一条指令可以直接发给 Agent。',
+    'terminal.emptyBody': '这里会连续显示消息、计划、工具调用、命令输出和授权请求，适合在手机上直接跟进任务。',
+    'terminal.emptyConnectingTitle': '正在连接会话…',
+    'terminal.emptyConnectingBody': '正在建立 ACP 会话流，稍候即可开始对话。',
+    'terminal.emptyErrorTitle': '会话流连接失败',
+    'terminal.emptyErrorBody': '无法连接到会话流。请检查网络后点击上方的“重连”按钮重试。',
+    'terminal.planTitle': '执行计划',
+    'terminal.composerLabel': '发送下一条指令',
+    'terminal.composerPlaceholder': '例如：检查这个仓库里 web 端还有哪些体验问题，并直接修掉',
+    'terminal.sendPrompt': '发送',
+    'terminal.cancelTurn': '停止本轮',
+    'terminal.starter.audit': '扫描这个仓库里还没打磨好的体验问题',
+    'terminal.starter.fix': '继续当前任务并直接修改代码',
+    'terminal.starter.summary': '总结当前进展、风险和下一步',
+    'terminal.promptFinished': ({ reason }) => `本轮已完成 · stop reason: ${reason}`,
+    'terminal.promptFailed': ({ message }) => `本轮失败 · ${message}`,
+    'terminal.permissionTitle': '等待授权',
+    'terminal.toolTerminal': '命令输出',
+    'terminal.toolCallFallback': '工具调用',
+    'terminal.role.user': '你',
+    'terminal.role.assistant': 'Agent',
+    'terminal.role.thought': '思考',
+    'terminal.toolKind.read': '读取',
+    'terminal.toolKind.edit': '编辑',
+    'terminal.toolKind.delete': '删除',
+    'terminal.toolKind.move': '移动',
+    'terminal.toolKind.search': '搜索',
+    'terminal.toolKind.execute': '执行',
+    'terminal.toolKind.think': '思考',
+    'terminal.toolKind.fetch': '获取',
+    'terminal.toolKind.switch_mode': '切换模式',
+    'terminal.toolKind.other': '工具',
     'modal.title': '提示',
     'theme.toLight': '切换日间',
     'theme.toLightAria': '切换到日间模式',
@@ -179,8 +245,6 @@ const MESSAGES = {
     'detail.subline': ({ status, relative, absolute }) => `${status} · 最近心跳 ${relative} · ${absolute}`,
     'detail.capabilitySummary': ({ tools }) => `当前节点支持 ${tools}，可直接用于新建会话。`,
     'detail.capabilitySummaryEmpty': '当前节点未上报可用工具。',
-    'detail.tmuxAvailable': '可用',
-    'detail.tmuxMissing': '缺失',
     'detail.sessionSummary': ({ total, active, matched }) =>
       `总会话 ${total} · 活跃 ${active}${matched === undefined ? '' : ` · 匹配 ${matched}`}`,
     'detail.noSessionMatched': '没有匹配的会话。',
@@ -191,9 +255,6 @@ const MESSAGES = {
     'detail.metric.lastHeartbeat': '最近心跳',
     'detail.metric.activeSessions': '活跃会话',
     'detail.metric.totalSessions': '总会话',
-    'detail.metric.tmux': 'tmux',
-    'detail.metric.queueBytes': '队列字节',
-    'detail.metric.queueFrames': '队列帧',
     'session.idLabel': '会话 ID',
     'session.meta.created': '创建时间',
     'session.meta.projectPath': '项目路径',
@@ -201,16 +262,8 @@ const MESSAGES = {
     'session.createdByUnknown': '未知用户',
     'terminal.meta': ({ tool, sessionId, runner, status, connection, projectPath }) =>
       `${tool} 会话 ID: ${sessionId} · 节点: ${runner} · 状态: ${status}${connection ? ` · ${connection}` : ''}${projectPath ? ` · 路径: ${projectPath}` : ''}`,
-    'terminal.connectionFailed': '终端连接失败',
+    'terminal.connectionFailed': '会话连接失败',
     'terminal.startFailedInline': ({ message }) => `[启动会话失败: ${message}]`,
-    'terminal.tokenFailedInline': ({ message }) => `[终端令牌获取失败: ${message}]`,
-    'terminal.tokenMissingInline': '[终端令牌缺失]',
-    'terminal.connectingInline': '[连接中...]',
-    'terminal.connectedInline': '[已连接]',
-    'terminal.disconnectedInline': '[已断开]',
-    'terminal.wsErrorInline': '[WebSocket 异常]',
-    'terminal.basicModeInline': '[已启用基础终端模式]',
-    'terminal.basicInputPlaceholder': '基础终端输入：支持键入、回车、退格和粘贴',
     'terminal.status.connected': '已连接',
     'terminal.status.connecting': '连接中',
     'terminal.status.disconnected': '未连接',
@@ -225,12 +278,20 @@ const MESSAGES = {
     'notify.refreshFailed': '刷新失败',
     'notify.loadRunnerFailed': '加载节点详情失败',
     'notify.createSessionTitle': '会话已创建',
-    'notify.createSessionMessage': ({ sessionId }) => `会话 ID: ${sessionId}，正在准备终端。`,
-    'notify.createSessionInline': ({ sessionId }) => `已创建会话：${sessionId}，正在进入终端…`,
+    'notify.createSessionMessage': ({ sessionId }) => `会话 ID: ${sessionId}，正在准备 ACP 会话流。`,
+    'notify.createSessionInline': ({ sessionId }) => `已创建会话：${sessionId}，正在进入 ACP 会话…`,
     'notify.createSessionFailedTitle': '创建会话失败',
+    'notify.quickStartFailedTitle': '快速开始失败',
     'notify.createFailed': '创建失败',
     'notify.runnerOfflineTitle': '节点已离线',
-    'notify.runnerOfflineMessage': '当前节点离线，无法进入终端。',
+    'notify.runnerOfflineMessage': '当前节点离线，无法进入会话。',
+    'notify.offlineTitle': '设备已离线',
+    'notify.offlineMessage': '当前网络不可用。ACP 会话会保留界面状态，待网络恢复后自动重连。',
+    'notify.onlineTitle': '网络已恢复',
+    'notify.onlineMessage': '已重新联网，正在恢复当前视图。',
+    'notify.sessionResumedTitle': '会话已恢复',
+    'notify.sessionResumedMessage': 'ACP 会话连接已重新建立。',
+    'notify.sessionResumeFailedTitle': '会话恢复失败',
     'notify.startSessionFailedTitle': '启动会话失败',
     'notify.stopRequestedTitle': '停止请求已发送',
     'notify.stopRequestedMessage': ({ sessionId }) => `会话 ${sessionId} 正在停止。`,
@@ -283,14 +344,14 @@ const MESSAGES = {
     'theme.toggleFallback': '切换主题',
   },
   en: {
-    'app.description': 'AgentMesh console for managing the gateway, local runners, and browser terminals for Codex, Claude, and Gemini CLI.',
+    'app.description': 'AgentMesh console for managing the gateway, local runners, and ACP session streams for Codex, Claude, and Gemini.',
     'chrome.tagline': 'Remote runner control for Codex, Claude, and Gemini CLI',
     'chrome.language': 'Interface language',
     'auth.signedOut': 'Not signed in',
     'auth.signedIn': ({ user }) => `Signed in · ${user || '-'}`,
     'login.eyebrow': 'Gateway online',
     'login.title': 'AgentMesh',
-    'login.copy': 'Sign in with the local gateway account to manage runners, sessions, and terminals from one console.',
+    'login.copy': 'Sign in with the local gateway account to manage runners, sessions, and ACP workflows from one console.',
     'login.footnote': 'If TOTP is enabled, the next step will ask for a 6-digit code.',
     'field.username': 'Username',
     'field.password': 'Password',
@@ -318,25 +379,39 @@ const MESSAGES = {
     'button.removeTotp': 'Remove TOTP',
     'button.backToList': 'Back to list',
     'button.refreshDetail': 'Refresh details',
-    'button.createAndOpenTerminal': 'Create and open terminal',
+    'button.createAndOpenTerminal': 'Create and open session',
     'button.back': 'Back',
     'button.reconnect': 'Reconnect',
     'button.disconnect': 'Disconnect',
     'button.confirm': 'Confirm',
     'button.cancel': 'Cancel',
     'button.viewDetails': 'View details',
+    'button.startCoding': 'Start coding',
     'button.delete': 'Delete',
-    'button.openTerminal': 'Open terminal',
+    'button.openTerminal': 'Open session',
     'button.copyClaudeResume': 'Copy Claude resume command',
     'button.copyGeminiLaunch': 'Copy Gemini launch command',
     'button.stop': 'Stop',
     'button.zoomIn': 'Zoom In',
     'button.zoomOut': 'Zoom Out',
     'workspace.eyebrow': 'Console',
-    'workspace.title': 'Console',
+    'workspace.title': 'Start coding',
+    'workspace.heroEyebrow': 'Start',
+    'workspace.heroTitle': 'Pick an online runner and start ACP coding right away.',
+    'workspace.heroBody': 'AgentMesh will create the session on that runner and keep rendering messages, plans, tool calls, and file changes as one continuous workflow.',
     'workspace.riskTitle': 'Security notice',
     'workspace.runnerListTitle': 'Runner list',
-    'workspace.runnerListCopy': 'All runners visible to this gateway, sorted by connectivity and latest heartbeat.',
+    'workspace.runnerListCopy': 'Choose an online runner and start working first. Detailed config and session history stay secondary.',
+    'workspace.recentTitle': 'Resume recent sessions',
+    'workspace.recentCopy': 'If you just left a session on mobile, jump back into it from here.',
+    'workspace.metric.online': 'Online runners',
+    'workspace.metric.active': 'Active sessions',
+    'workspace.metric.tools': 'ACP tools',
+    'workspace.quickStart': 'Start coding',
+    'workspace.quickStartHint': 'Use the default tool and the runner default workspace',
+    'workspace.quickResume': 'Resume recent session',
+    'workspace.openRunners': 'Browse runners',
+    'workspace.recentEmpty': 'No recent sessions yet. Pick an online runner to start the first one.',
     'stats.onlineRunners': 'Online runners',
     'stats.onlineRunnersMeta': 'Nodes ready to receive work now',
     'stats.offlineRunners': 'Offline runners',
@@ -358,14 +433,14 @@ const MESSAGES = {
     'detail.capabilitiesTitle': 'Runner capabilities',
     'detail.rawCapabilities': 'Show raw capability payload',
     'detail.newSessionTitle': 'Create session',
-    'detail.newSessionCopy': 'Choose a detected CLI agent, a valid project path, and a project name for this runner, then open the terminal immediately.',
+    'detail.newSessionCopy': 'Choose a detected CLI agent, a valid project path, and a project name for this runner, then open the ACP session immediately.',
     'detail.cliAgent': 'CLI agent',
     'detail.projectPath': 'Project path',
     'detail.projectPathDefault': 'Default working directory',
     'detail.projectName': 'Project name',
     'detail.sessionListTitle': 'Session list',
     'detail.sessionSearchLabel': 'Filter sessions',
-    'terminal.eyebrow': 'Terminal',
+    'terminal.eyebrow': 'ACP Session',
     'terminal.disconnected': 'Disconnected',
     'terminal.hint': 'Mobile mode supports sticky Ctrl / Alt modifiers, repeating arrow keys, pinch-to-zoom, and quick keyboard focus.',
     'terminal.mobileKeys': 'Terminal shortcut keys',
@@ -386,6 +461,58 @@ const MESSAGES = {
     'terminal.paletteSolarizedLight': 'Solarized Light',
     'terminal.palettePaper': 'Paper',
     'terminal.paletteAmber': 'Amber',
+    'terminal.protocolLabel': 'Protocol',
+    'terminal.connectionLabel': 'Connection',
+    'terminal.agentLabel': 'Agent',
+    'terminal.authLabel': 'Auth',
+    'terminal.authReady': 'Environment ready',
+    'terminal.workspaceTitle': 'Live workspace',
+    'terminal.workspaceTurns': 'Turns',
+    'terminal.workspaceTools': 'Tool calls',
+    'terminal.workspaceFiles': 'Recent files',
+    'terminal.workspaceApprovals': 'Pending approvals',
+    'terminal.workspaceNoFiles': 'No files touched yet in this session',
+    'terminal.turnLabel': ({ index }) => `Turn ${index}`,
+    'terminal.turnMeta': ({ tools, files }) => `${tools} tool calls · ${files} files`,
+    'terminal.turnOpen': 'Open turn',
+    'terminal.sectionOutput': 'Command output',
+    'terminal.sectionDiff': 'Diff',
+    'terminal.sectionContent': 'Structured result',
+    'terminal.sectionEmpty': 'No renderable result for this tool step yet.',
+    'terminal.linesUnit': ({ count }) => `${count} lines`,
+    'terminal.emptyEyebrow': 'Connected',
+    'terminal.emptyTitle': 'The session is ready. Send the next instruction directly to the agent.',
+    'terminal.emptyBody': 'This view will keep rendering messages, plans, tool calls, command output, and permission requests in a mobile-friendly flow.',
+    'terminal.emptyConnectingTitle': 'Connecting to the session…',
+    'terminal.emptyConnectingBody': 'Setting up the ACP session stream. You can start chatting in a moment.',
+    'terminal.emptyErrorTitle': 'Session stream unavailable',
+    'terminal.emptyErrorBody': 'The session stream could not be reached. Check your connection and use the Reconnect button above to retry.',
+    'terminal.planTitle': 'Plan',
+    'terminal.composerLabel': 'Send the next instruction',
+    'terminal.composerPlaceholder': 'For example: audit the web UX in this repo and fix the obvious issues directly',
+    'terminal.sendPrompt': 'Send',
+    'terminal.cancelTurn': 'Stop turn',
+    'terminal.starter.audit': 'Scan the repo for rough UX edges',
+    'terminal.starter.fix': 'Continue the task and edit the code directly',
+    'terminal.starter.summary': 'Summarize progress, risks, and next steps',
+    'terminal.promptFinished': ({ reason }) => `Turn finished · stop reason: ${reason}`,
+    'terminal.promptFailed': ({ message }) => `Turn failed · ${message}`,
+    'terminal.permissionTitle': 'Permission required',
+    'terminal.toolTerminal': 'Command output',
+    'terminal.toolCallFallback': 'Tool call',
+    'terminal.role.user': 'You',
+    'terminal.role.assistant': 'Agent',
+    'terminal.role.thought': 'Thinking',
+    'terminal.toolKind.read': 'Read',
+    'terminal.toolKind.edit': 'Edit',
+    'terminal.toolKind.delete': 'Delete',
+    'terminal.toolKind.move': 'Move',
+    'terminal.toolKind.search': 'Search',
+    'terminal.toolKind.execute': 'Execute',
+    'terminal.toolKind.think': 'Think',
+    'terminal.toolKind.fetch': 'Fetch',
+    'terminal.toolKind.switch_mode': 'Mode',
+    'terminal.toolKind.other': 'Tool',
     'modal.title': 'Notice',
     'theme.toLight': 'Light mode',
     'theme.toLightAria': 'Switch to light mode',
@@ -419,8 +546,6 @@ const MESSAGES = {
     'detail.subline': ({ status, relative, absolute }) => `${status} · Last heartbeat ${relative} · ${absolute}`,
     'detail.capabilitySummary': ({ tools }) => `This runner supports ${tools} and can be used to create new sessions immediately.`,
     'detail.capabilitySummaryEmpty': 'This runner has not reported any supported tools.',
-    'detail.tmuxAvailable': 'Available',
-    'detail.tmuxMissing': 'Missing',
     'detail.sessionSummary': ({ total, active, matched }) =>
       `Total ${total} · Active ${active}${matched === undefined ? '' : ` · Matched ${matched}`}`,
     'detail.noSessionMatched': 'No sessions match the current filter.',
@@ -431,9 +556,6 @@ const MESSAGES = {
     'detail.metric.lastHeartbeat': 'Last heartbeat',
     'detail.metric.activeSessions': 'Active sessions',
     'detail.metric.totalSessions': 'Total sessions',
-    'detail.metric.tmux': 'tmux',
-    'detail.metric.queueBytes': 'Queue bytes',
-    'detail.metric.queueFrames': 'Queue frames',
     'session.idLabel': 'Session ID',
     'session.meta.created': 'Created',
     'session.meta.projectPath': 'Project path',
@@ -441,16 +563,8 @@ const MESSAGES = {
     'session.createdByUnknown': 'Unknown user',
     'terminal.meta': ({ tool, sessionId, runner, status, connection, projectPath }) =>
       `${tool} Session ID: ${sessionId} · Runner: ${runner} · Status: ${status}${connection ? ` · ${connection}` : ''}${projectPath ? ` · Path: ${projectPath}` : ''}`,
-    'terminal.connectionFailed': 'Terminal connection failed',
+    'terminal.connectionFailed': 'Session connection failed',
     'terminal.startFailedInline': ({ message }) => `[start session failed: ${message}]`,
-    'terminal.tokenFailedInline': ({ message }) => `[terminal token request failed: ${message}]`,
-    'terminal.tokenMissingInline': '[terminal token missing]',
-    'terminal.connectingInline': '[connecting...]',
-    'terminal.connectedInline': '[connected]',
-    'terminal.disconnectedInline': '[disconnected]',
-    'terminal.wsErrorInline': '[websocket error]',
-    'terminal.basicModeInline': '[basic terminal mode enabled]',
-    'terminal.basicInputPlaceholder': 'Basic terminal input: type, press enter, backspace, or paste',
     'terminal.status.connected': 'Connected',
     'terminal.status.connecting': 'Connecting',
     'terminal.status.disconnected': 'Disconnected',
@@ -465,12 +579,20 @@ const MESSAGES = {
     'notify.refreshFailed': 'Refresh failed',
     'notify.loadRunnerFailed': 'Failed to load runner details',
     'notify.createSessionTitle': 'Session created',
-    'notify.createSessionMessage': ({ sessionId }) => `Session ID: ${sessionId}. Preparing the terminal now.`,
-    'notify.createSessionInline': ({ sessionId }) => `Session created: ${sessionId}. Opening terminal…`,
+    'notify.createSessionMessage': ({ sessionId }) => `Session ID: ${sessionId}. Preparing the ACP stream now.`,
+    'notify.createSessionInline': ({ sessionId }) => `Session created: ${sessionId}. Opening ACP session…`,
     'notify.createSessionFailedTitle': 'Failed to create session',
+    'notify.quickStartFailedTitle': 'Quick start failed',
     'notify.createFailed': 'Creation failed',
     'notify.runnerOfflineTitle': 'Runner offline',
-    'notify.runnerOfflineMessage': 'The current runner is offline, so the terminal cannot be opened.',
+    'notify.runnerOfflineMessage': 'The current runner is offline, so the session cannot be opened.',
+    'notify.offlineTitle': 'Device offline',
+    'notify.offlineMessage': 'The network is unavailable. The ACP session view will stay in place and retry when connectivity returns.',
+    'notify.onlineTitle': 'Back online',
+    'notify.onlineMessage': 'Connectivity is restored. Refreshing the current view now.',
+    'notify.sessionResumedTitle': 'Session restored',
+    'notify.sessionResumedMessage': 'The ACP session connection has been re-established.',
+    'notify.sessionResumeFailedTitle': 'Failed to restore session',
     'notify.startSessionFailedTitle': 'Failed to start session',
     'notify.stopRequestedTitle': 'Stop request sent',
     'notify.stopRequestedMessage': ({ sessionId }) => `Session ${sessionId} is stopping.`,
@@ -536,6 +658,7 @@ const state = {
   authMeta: null,
   settingsData: null,
   runnersAll: [],
+  workspaceSessions: [],
   runnerSummary: { total: 0, online: 0, offline: 0, returned: 0 },
   sessionSummary: { total: 0, active: 0 },
   selectedRunnerId: '',
@@ -549,6 +672,8 @@ const state = {
   liveRefreshQueued: false,
   notifications: [],
   terminalConnection: 'disconnected',
+  networkOnline: navigator.onLine !== false,
+  terminalReconnectPending: false,
   mobileChromeOpen: false,
 };
 
@@ -556,6 +681,7 @@ let currentTheme = THEME_LIGHT;
 let currentLanguage = LANG_ZH;
 let currentTerminalPalette = TERM_PALETTE_NOIR;
 let modalResolve = null;
+let modalPreviousFocus = null;
 
 const terminal = createTerminalController({
   $,
@@ -569,6 +695,15 @@ const terminal = createTerminalController({
     state.terminalConnection = String(status || 'disconnected');
     if (status === 'connected' && state.activeSession) {
       state.activeSession.status = 'running';
+    }
+    if (status === 'connected' && state.terminalReconnectPending) {
+      state.terminalReconnectPending = false;
+      notify({
+        type: 'success',
+        title: t('notify.sessionResumedTitle'),
+        message: t('notify.sessionResumedMessage'),
+        ttl: 2600,
+      });
     }
     if (state.activeSession) updateTerminalHeader(state.activeSession);
   },
@@ -628,6 +763,86 @@ function readTerminalPalettePreference() {
     if (stored === 'solarized') return TERM_PALETTE_SOLARIZED_DARK;
   } catch { }
   return TERM_PALETTE_NOIR;
+}
+
+let viewportSyncRaf = 0;
+
+function syncViewportMetrics() {
+  viewportSyncRaf = 0;
+  const root = document.documentElement;
+  const layoutHeight = Math.round(window.innerHeight || root.clientHeight || 0);
+  const visualViewport = window.visualViewport || null;
+  const visualHeight = Math.round(visualViewport ? visualViewport.height : layoutHeight);
+  const visualOffsetTop = Math.round(visualViewport ? visualViewport.offsetTop : 0);
+  const visibleHeight = Math.max(0, visualHeight + visualOffsetTop);
+  const keyboardInset = Math.max(0, layoutHeight - visibleHeight);
+
+  root.style.setProperty('--app-height', `${layoutHeight}px`);
+  root.style.setProperty('--visual-viewport-height', `${Math.max(visualHeight, visibleHeight)}px`);
+  root.style.setProperty('--keyboard-inset', `${keyboardInset}px`);
+}
+
+function scheduleViewportMetricsSync() {
+  if (viewportSyncRaf) return;
+  viewportSyncRaf = window.requestAnimationFrame(syncViewportMetrics);
+}
+
+async function resumeVisibleView() {
+  if (!state.auth.authenticated || document.visibilityState === 'hidden') return;
+  if (!state.networkOnline) return;
+
+  if (state.view === 'terminal' && state.activeSession) {
+    if (state.terminalConnection !== 'connected') {
+      state.terminalReconnectPending = true;
+      try {
+        await terminal.resume();
+      } catch (error) {
+        state.terminalReconnectPending = false;
+        notify({
+          type: 'error',
+          title: t('notify.sessionResumeFailedTitle'),
+          message: localizeErrorText(String((error && error.message) || error || t('label.unknown'))),
+        });
+      }
+    }
+    return;
+  }
+
+  if (state.view === 'runnerDetail') {
+    await refreshRunnerDetail(false).catch(() => undefined);
+    return;
+  }
+
+  if (state.view === 'workspace') {
+    await refreshRunnerList(false).catch(() => undefined);
+  }
+}
+
+function handleNetworkStatusChange(nextOnline) {
+  const online = nextOnline !== false;
+  if (state.networkOnline === online) return;
+  state.networkOnline = online;
+  terminal.setNetworkStatus(online);
+
+  if (!state.auth.authenticated) return;
+
+  if (!online) {
+    notify({
+      type: 'warn',
+      title: t('notify.offlineTitle'),
+      message: t('notify.offlineMessage'),
+      ttl: 4200,
+    });
+    return;
+  }
+
+  notify({
+    type: 'success',
+    title: t('notify.onlineTitle'),
+    message: t('notify.onlineMessage'),
+    ttl: 2400,
+  });
+  void resumeVisibleView();
 }
 
 function updateLanguageToggle() {
@@ -760,6 +975,7 @@ function applyLanguage(lang, persist = true) {
   setLoginTotpMode(!$('authTotpField').classList.contains('hidden'));
   refreshNotifications(state.authMeta);
   if (state.settingsData) renderSettings(state.settingsData);
+  renderWorkspaceHome();
   if (state.runnersAll.length || state.view === 'workspace') renderRunnerList();
   if (state.runnerDetail) renderRunnerDetail();
   if (state.activeSession) updateTerminalHeader(state.activeSession);
@@ -808,6 +1024,15 @@ function notify({ type = 'info', title = '', message = '', ttl = 3600 }) {
   }, ttl);
 }
 
+async function registerPwaWorker() {
+  if (!('serviceWorker' in navigator)) return;
+  try {
+    await navigator.serviceWorker.register('/sw.js');
+  } catch {
+    // Ignore service worker registration failures in non-PWA contexts.
+  }
+}
+
 function localizeStatus(status) {
   const key = 'status.' + String(status || '').toLowerCase();
   const value = t(key);
@@ -840,15 +1065,13 @@ function localizeErrorText(raw) {
     'project not found': '项目不存在',
     'runnerId is required (or bind project.runnerId first)': '缺少 runnerId，或项目尚未绑定 runnerId',
     'session not found': '会话不存在',
+    'empty prompt': '输入不能为空',
+    'permission request not found': '授权请求不存在或已处理',
     'session already stopping': '会话已在停止中',
     'session is active; use force=1 to delete': '会话仍在活动中，请使用 force=1 删除',
-    'no snapshot yet': '尚无快照数据',
-    'no pty data yet': '尚无 PTY 数据',
     'ws send failed': '向 Runner 发送指令失败',
     'copy failed': '复制失败',
     'empty text': '没有可复制的内容',
-    'terminal token missing': '终端令牌缺失',
-    'terminal websocket error': '终端 WebSocket 连接异常',
     'runner ws busy; retry': 'Runner WebSocket 正忙，请稍后重试',
     'not available': '当前不可用',
     'setup disabled': 'Setup 已禁用',
@@ -865,8 +1088,8 @@ function localizeErrorText(raw) {
   if (match) return `会话已处于${localizeStatus(match[1])}状态`;
   match = message.match(/^cannot stop session in status (.+)$/i);
   if (match) return `当前状态为${localizeStatus(match[1])}，无法停止会话`;
-  match = message.match(/^tmux is required on runner host: (.+)$/i);
-  if (match) return `节点主机缺少 tmux：${match[1]}`;
+  match = message.match(/^cannot cancel session in status (.+)$/i);
+  if (match) return `当前状态为${localizeStatus(match[1])}，无法停止本轮`;
   match = message.match(/^project path not found: (.+)$/i);
   if (match) return `项目路径不存在：${match[1]}`;
   match = message.match(/^project path is not a directory: (.+)$/i);
@@ -875,10 +1098,6 @@ function localizeErrorText(raw) {
   if (match) return `项目路径不可访问：${match[1]}`;
   match = message.match(/^command not found: (.+)$/i);
   if (match) return `未找到命令：${match[1]}`;
-  match = message.match(/^failed to relay input$/i);
-  if (match) return '转发终端输入失败';
-  match = message.match(/^failed to relay resize$/i);
-  if (match) return '转发终端尺寸变更失败';
 
   return message;
 }
@@ -898,11 +1117,49 @@ function modalHide() {
   $('modalOk').onclick = null;
   $('modalCancel').onclick = null;
   modalResolve = null;
+  const previous = modalPreviousFocus;
+  modalPreviousFocus = null;
+  if (previous && typeof previous.focus === 'function' && document.contains(previous)) {
+    try { previous.focus(); } catch { }
+  }
+}
+
+function modalCancelActive() {
+  const done = modalResolve;
+  modalHide();
+  if (done) done({ confirmed: false, values: {} });
+}
+
+function handleModalKeydown(ev) {
+  const mask = $('modalMask');
+  if (!mask || mask.classList.contains('hidden')) return;
+  if (ev.key === 'Escape') {
+    ev.preventDefault();
+    modalCancelActive();
+    return;
+  }
+  if (ev.key !== 'Tab') return;
+  const card = mask.querySelector('.modal-card');
+  if (!card) return;
+  const focusable = Array.from(card.querySelectorAll('input, select, textarea, button'))
+    .filter((el) => !el.disabled && el.offsetParent !== null);
+  if (!focusable.length) return;
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+  if (ev.shiftKey && document.activeElement === first) {
+    ev.preventDefault();
+    last.focus();
+  } else if (!ev.shiftKey && document.activeElement === last) {
+    ev.preventDefault();
+    first.focus();
+  }
 }
 
 function modalShow(opts = {}) {
+  if (modalResolve) modalCancelActive();
   return new Promise((resolve) => {
     modalResolve = resolve;
+    modalPreviousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const title = opts.title ? String(opts.title) : t('modal.title');
     const body = opts.body ? String(opts.body) : '';
     const okText = opts.okText ? String(opts.okText) : t('button.confirm');
@@ -934,7 +1191,6 @@ function modalShow(opts = {}) {
       wrap.appendChild(label);
       wrap.appendChild(input);
       $('modalFields').appendChild(wrap);
-      setTimeout(() => input.focus(), 0);
     }
 
     $('modalCancel').onclick = () => {
@@ -950,6 +1206,11 @@ function modalShow(opts = {}) {
     };
 
     $('modalMask').classList.remove('hidden');
+    const firstInput = $('modalFields').querySelector('input');
+    const focusTarget = firstInput || $('modalOk');
+    setTimeout(() => {
+      try { focusTarget.focus(); } catch { }
+    }, 0);
   });
 }
 
@@ -1079,7 +1340,7 @@ function runnerAvailableTools(runner) {
   const details = toolDetailsFromCapabilities(runner && runner.capabilities);
   const detailKeys = TOOL_ORDER.filter((tool) => details[tool]);
   if (!detailKeys.length) return runnerSupportedTools(runner);
-  return TOOL_ORDER.filter((tool) => details[tool] && details[tool].available === true && details[tool].source !== 'fallback');
+  return TOOL_ORDER.filter((tool) => details[tool] && details[tool].available === true);
 }
 
 function runnerToolStates(runner) {
@@ -1186,6 +1447,7 @@ function setLoginTotpMode(enabled) {
 }
 
 function resetAuth() {
+  terminal.disconnect(true);
   closeEventStream();
   if (state.autoRefreshTimer) {
     clearInterval(state.autoRefreshTimer);
@@ -1195,6 +1457,7 @@ function resetAuth() {
   state.authMeta = null;
   state.settingsData = null;
   state.runnersAll = [];
+  state.workspaceSessions = [];
   state.runnerSummary = { total: 0, online: 0, offline: 0, returned: 0 };
   state.sessionSummary = { total: 0, active: 0 };
   state.runnerDetail = null;
@@ -1205,6 +1468,7 @@ function resetAuth() {
   setLoginTotpMode(false);
   setInlineFeedback('loginError', '', '');
   setSummaryTiles();
+  renderWorkspaceHome();
   state.notifications = [];
   renderNotifications();
   closeTermPalettePanel();
@@ -1243,10 +1507,10 @@ async function api(method, path, body) {
 }
 
 function setSummaryTiles() {
-  $('statOnline').textContent = String(state.runnerSummary.online || 0);
-  $('statOffline').textContent = String(state.runnerSummary.offline || 0);
-  $('statSessions').textContent = String(state.sessionSummary.total || 0);
-  $('statActiveSessions').textContent = String(state.sessionSummary.active || 0);
+  if ($('statOnline')) $('statOnline').textContent = String(state.runnerSummary.online || 0);
+  if ($('statOffline')) $('statOffline').textContent = String(state.runnerSummary.offline || 0);
+  if ($('statSessions')) $('statSessions').textContent = String(state.sessionSummary.total || 0);
+  if ($('statActiveSessions')) $('statActiveSessions').textContent = String(state.sessionSummary.active || 0);
 }
 
 function closeNotificationPanel() {
@@ -1465,6 +1729,75 @@ function ensureAutoRefresh() {
   }, 6000);
 }
 
+function quickStartToolForRunner(runner) {
+  const available = runnerAvailableTools(runner);
+  if (available.includes('codex')) return 'codex';
+  return available[0] || '';
+}
+
+function recentWorkspaceSessions(limit = 3) {
+  return [...(state.workspaceSessions || [])]
+    .sort((a, b) => Number(b.startedAt || b.createdAt || 0) - Number(a.startedAt || a.createdAt || 0))
+    .slice(0, limit);
+}
+
+function renderWorkspaceHome() {
+  const metrics = $('workspaceLaunchMetrics');
+  const actions = $('workspacePrimaryActions');
+  const recentSection = $('workspaceRecentSection');
+  const recentHost = $('workspaceRecentSessions');
+  if (!metrics || !actions || !recentSection || !recentHost) return;
+
+  const onlineRunners = state.runnersAll.filter((runner) => runner.online);
+  const supportedTools = new Set();
+  for (const runner of onlineRunners) {
+    for (const tool of runnerAvailableTools(runner)) supportedTools.add(tool);
+  }
+
+  metrics.innerHTML = [
+    [t('workspace.metric.online'), String(onlineRunners.length || 0)],
+    [t('workspace.metric.active'), String(state.sessionSummary.active || 0)],
+    [t('workspace.metric.tools'), String(supportedTools.size || 0)],
+  ].map(([label, value]) => `
+    <div class="workspace-launch-metric">
+      <strong>${escapeHtml(value)}</strong>
+      <span>${escapeHtml(label)}</span>
+    </div>
+  `).join('');
+
+  const recent = recentWorkspaceSessions(3);
+  const primaryRunner = onlineRunners[0] || null;
+  actions.innerHTML = `
+    ${recent[0] ? `<button class="button primary" data-action="resume-recent-session" data-session-id="${escapeHtml(recent[0].id)}" type="button">${escapeHtml(t('workspace.quickResume'))}</button>` : ''}
+    ${primaryRunner ? `<button class="button ghost" data-action="quick-start-runner" data-runner-id="${escapeHtml(primaryRunner.id)}" type="button">${escapeHtml(t('workspace.quickStart'))}</button>` : `<button class="button ghost" type="button" disabled>${escapeHtml(t('workspace.quickStart'))}</button>`}
+    ${primaryRunner ? `<span class="workspace-action-hint">${escapeHtml((primaryRunner.name || primaryRunner.id) + ' · ' + t('workspace.quickStartHint'))}</span>` : `<span class="workspace-action-hint">${escapeHtml(t('runner.empty'))}</span>`}
+  `;
+
+  if (!recent.length) {
+    recentSection.classList.toggle('hidden', false);
+    recentHost.innerHTML = `<div class="empty-state compact">${escapeHtml(t('workspace.recentEmpty'))}</div>`;
+    return;
+  }
+
+  recentSection.classList.toggle('hidden', false);
+  recentHost.innerHTML = recent.map((session) => {
+    const status = String(session.status || 'created');
+    const runner = state.runnersAll.find((item) => item.id === session.runnerId);
+    return `
+      <article class="workspace-session-card" data-action="resume-recent-session" data-session-id="${escapeHtml(session.id)}">
+        <div class="workspace-session-main">
+          <strong>${escapeHtml(toolLabel(session.tool))}</strong>
+          <span class="mono-line">${escapeHtml(session.projectPath || runnerDisplayName(session.runnerId) || session.id)}</span>
+        </div>
+        <div class="workspace-session-side">
+          <span class="chip state ${status === 'running' ? 'connected' : 'connecting'}">${escapeHtml(localizeStatus(status))}</span>
+          <span class="badge neutral">${escapeHtml(runner ? (runner.name || runner.id) : session.runnerId)}</span>
+        </div>
+      </article>
+    `;
+  }).join('');
+}
+
 function renderRunnerList() {
   const host = $('runnerList');
   const all = [...state.runnersAll].sort((a, b) => {
@@ -1487,6 +1820,7 @@ function renderRunnerList() {
 
   host.innerHTML = all.map((runner) => {
     const toolStates = runnerToolStates(runner);
+    const primaryTool = quickStartToolForRunner(runner);
     const toolBadges = toolStates.length
       ? toolStates.map((item) => `
           <span
@@ -1505,19 +1839,15 @@ function renderRunnerList() {
               <span class="dot ${runner.online ? 'on' : 'off'}" aria-hidden="true"></span>
               <div class="runner-title">
                 <strong>${escapeHtml(runner.name || runner.id)}</strong>
+                <span class="runner-subline">${escapeHtml(runner.online ? t('status.online') : t('status.offline'))} · ${escapeHtml(formatRelativeTime(runner.lastSeenAt))}</span>
               </div>
             </div>
           </div>
           <div class="badge-row">${toolBadges}</div>
-          <div class="meta-grid runner-card-meta">
-            <div class="meta-item">
-              <span>最后在线</span>
-              <strong>${escapeHtml(formatRelativeTime(runner.lastSeenAt))}</strong>
-            </div>
-          </div>
         </div>
         <div class="runner-card-side">
           <div class="runner-actions">
+            <button class="button primary" data-action="quick-start-runner" data-runner-id="${escapeHtml(runner.id)}" data-tool="${escapeHtml(primaryTool)}" type="button"${runner.online && primaryTool ? '' : ' disabled'}>${escapeHtml(t('button.startCoding'))}</button>
             <button class="button ghost" data-action="open-runner" data-runner-id="${escapeHtml(runner.id)}" type="button">${escapeHtml(t('button.viewDetails'))}</button>
           </div>
         </div>
@@ -1624,7 +1954,7 @@ function renderRunnerDetail() {
 
   const host = $('detailSessionList');
   if (!sessions.length) {
-    host.innerHTML = '<div class="empty-state">' + escapeHtml(query ? t('detail.noSessionMatched') : t('detail.noSession')) + '</div>';
+    host.innerHTML = '<div class="empty-state">' + escapeHtml(t('detail.noSession')) + '</div>';
     return;
   }
 
@@ -1688,11 +2018,13 @@ async function refreshRunnerList(showError = true) {
       returned: state.runnersAll.length,
     };
     const sessions = Array.isArray(sessionsData && sessionsData.sessions) ? sessionsData.sessions : [];
+    state.workspaceSessions = sessions;
     state.sessionSummary = {
       total: sessions.length,
       active: sessions.filter((session) => ['running', 'starting', 'stopping'].includes(String(session.status || ''))).length,
     };
     setSummaryTiles();
+    renderWorkspaceHome();
     renderRunnerList();
   } catch (error) {
     if (showError) {
@@ -1774,6 +2106,52 @@ async function createSessionForRunner() {
   }
 }
 
+async function quickStartRunner(runnerId) {
+  const runner = state.runnersAll.find((item) => item.id === runnerId);
+  if (!runner || !runner.online) {
+    notify({
+      type: 'warn',
+      title: t('notify.runnerOfflineTitle'),
+      message: t('notify.runnerOfflineMessage'),
+    });
+    return;
+  }
+
+  const tool = quickStartToolForRunner(runner);
+  if (!tool) {
+    notify({
+      type: 'error',
+      title: t('notify.quickStartFailedTitle'),
+      message: t('session.noSupportedTool'),
+    });
+    return;
+  }
+
+  try {
+    const data = await api('POST', '/api/runners/' + encodeURIComponent(runnerId) + '/sessions', {
+      tool,
+    });
+    notify({
+      type: 'success',
+      title: t('notify.createSessionTitle'),
+      message: t('notify.createSessionMessage', { sessionId: data.sessionId }),
+    });
+    const created = {
+      id: data.sessionId,
+      runnerId,
+      tool,
+      projectPath: data.projectPath || null,
+      status: data.status || 'created',
+    };
+    await refreshRunnerList(false);
+    await openSession(created, { returnView: 'workspace' });
+  } catch (error) {
+    const rawMessage = String((error && error.data && error.data.error) || (error && error.message) || t('notify.createFailed'));
+    const message = localizeErrorText(rawMessage);
+    notify({ type: 'error', title: t('notify.quickStartFailedTitle'), message });
+  }
+}
+
 function getActiveDetailSession(sessionId) {
   const sessions = state.runnerDetail && Array.isArray(state.runnerDetail.sessions) ? state.runnerDetail.sessions : [];
   return sessions.find((session) => session.id === sessionId) || null;
@@ -1785,24 +2163,41 @@ function updateTerminalHeader(session) {
 
   const status = session.status || 'created';
   const statusClass = status === 'running' || status === 'starting' ? 'connected' : 'error';
+  const runnerName = runnerDisplayName(session.runnerId);
+  const summary = [
+    String(session.tool || 'ACP').toUpperCase(),
+    localizeStatus(status),
+    runnerName || session.runnerId,
+  ].filter(Boolean).join(' · ');
 
   container.innerHTML = `
-    <div class="term-header-item">
-      <span>${escapeHtml(t('session.meta.runner'))}</span>
-      <strong>${escapeHtml(runnerDisplayName(session.runnerId))}</strong>
-    </div>
-    <div class="term-header-item">
-      <span>${escapeHtml(t('detail.metric.status'))}</span>
-      <span class="chip state ${statusClass}">${escapeHtml(localizeStatus(status))}</span>
-    </div>
-    <div class="term-header-item">
-      <span>${escapeHtml(t('session.meta.projectPath'))}</span>
-      <strong class="mono-line">${escapeHtml(session.projectPath || '/')}</strong>
-    </div>
-    <div class="term-header-item">
-      <span>${escapeHtml(t('session.idLabel'))}</span>
-      <strong class="mono-line">${escapeHtml(session.id)}</strong>
-    </div>
+    <details class="term-session-bar">
+      <summary class="term-session-summary">
+        <div class="term-session-summary-main">
+          <span class="chip subtle">ACP</span>
+          <strong>${escapeHtml(summary)}</strong>
+        </div>
+        <span class="term-session-summary-hint">${escapeHtml(t('button.viewDetails'))}</span>
+      </summary>
+      <div class="term-session-details">
+        <div class="term-header-item">
+          <span>${escapeHtml(t('session.meta.runner'))}</span>
+          <strong>${escapeHtml(runnerName)}</strong>
+        </div>
+        <div class="term-header-item">
+          <span>${escapeHtml(t('detail.metric.status'))}</span>
+          <span class="chip state ${statusClass}">${escapeHtml(localizeStatus(status))}</span>
+        </div>
+        <div class="term-header-item">
+          <span>${escapeHtml(t('session.meta.projectPath'))}</span>
+          <strong class="mono-line">${escapeHtml(session.projectPath || '/')}</strong>
+        </div>
+        <div class="term-header-item">
+          <span>${escapeHtml(t('session.idLabel'))}</span>
+          <strong class="mono-line">${escapeHtml(session.id)}</strong>
+        </div>
+      </div>
+    </details>
   `;
 }
 
@@ -1817,7 +2212,7 @@ async function ensureSessionStarted(session) {
   if (started && started.status) session.status = started.status;
 }
 
-async function openSession(session) {
+async function openSession(session, options = {}) {
   const runner = state.runnersAll.find((item) => item.id === session.runnerId);
   if (!runner || !runner.online) {
     notify({
@@ -1828,7 +2223,7 @@ async function openSession(session) {
     return;
   }
   state.activeSession = { ...session };
-  state.returnView = 'runnerDetail';
+  state.returnView = options.returnView || (state.view === 'workspace' ? 'workspace' : 'runnerDetail');
   state.terminalConnection = 'connecting';
   showView('terminal');
   updateTerminalHeader(state.activeSession);
@@ -1843,7 +2238,15 @@ async function openSession(session) {
     return;
   }
   updateTerminalHeader(state.activeSession);
-  await terminal.connect(state.activeSession.id);
+  try {
+    await terminal.connect(state.activeSession.id);
+  } catch (error) {
+    const rawMessage = String((error && error.data && error.data.error) || (error && error.message) || t('label.unknown'));
+    const message = localizeErrorText(rawMessage);
+    state.terminalConnection = 'error';
+    updateTerminalHeader(state.activeSession);
+    notify({ type: 'error', title: t('terminal.connectionFailed'), message });
+  }
 }
 
 async function stopSession(sessionId) {
@@ -1863,6 +2266,8 @@ async function stopSession(sessionId) {
 }
 
 async function deleteSession(sessionId) {
+  const session = getActiveDetailSession(sessionId);
+  const runnerId = (session && session.runnerId) || state.selectedRunnerId;
   const result = await modalShow({
     title: t('notify.deleteSessionTitle'),
     body: t('notify.deleteSessionBody'),
@@ -2102,6 +2507,7 @@ async function doLogin(ev) {
 
 async function doLogout() {
   $('btnLogout').disabled = true;
+  terminal.disconnect(true);
   try {
     await api('POST', '/api/auth/logout', {});
   } catch { }
@@ -2124,6 +2530,26 @@ function bindRunnerListEvents() {
     if (action === 'open-runner' || target.hasAttribute('data-runner-card')) {
       ev.preventDefault();
       openRunnerDetail(runnerId);
+    }
+  });
+}
+
+function bindWorkspaceHomeEvents() {
+  $('workspaceView').addEventListener('click', (ev) => {
+    const target = ev.target instanceof Element ? ev.target.closest('[data-action], [data-session-id], [data-runner-id]') : null;
+    if (!target) return;
+    const action = target.getAttribute('data-action');
+    if (action === 'quick-start-runner') {
+      ev.preventDefault();
+      const runnerId = target.getAttribute('data-runner-id') || '';
+      if (runnerId) quickStartRunner(runnerId);
+      return;
+    }
+    if (action === 'resume-recent-session') {
+      ev.preventDefault();
+      const sessionId = target.getAttribute('data-session-id') || '';
+      const session = (state.workspaceSessions || []).find((item) => item.id === sessionId);
+      if (session) openSession(session, { returnView: 'workspace' });
     }
   });
 }
@@ -2165,6 +2591,7 @@ function bindSessionListEvents() {
 }
 
 function bindUiEvents() {
+  bindWorkspaceHomeEvents();
   $('btnLangZh').onclick = () => applyLanguage(LANG_ZH, true);
   $('btnLangEn').onclick = () => applyLanguage(LANG_EN, true);
   $('btnThemeToggle').onclick = () => toggleTheme();
@@ -2184,7 +2611,7 @@ function bindUiEvents() {
   $('btnRefreshRunners').onclick = () => refreshRunnerList(true);
   $('btnDeleteRunner').onclick = () => {
     const runnerId = state.runnerDetail && state.runnerDetail.runner && state.runnerDetail.runner.id;
-    if (runnerId) deleteRunnerFlow(runnerId);
+    if (runnerId) deleteRunner(runnerId);
   };
   $('btnNotifications').onclick = (ev) => {
     ev.stopPropagation();
@@ -2220,17 +2647,22 @@ function bindUiEvents() {
   };
   $('btnTermReconnect').onclick = async () => {
     if (!state.activeSession) return;
-    await terminal.reconnect();
+    try {
+      await terminal.reconnect();
+    } catch (error) {
+      const rawMessage = String((error && error.data && error.data.error) || (error && error.message) || t('label.unknown'));
+      const message = localizeErrorText(rawMessage);
+      state.terminalConnection = 'error';
+      updateTerminalHeader(state.activeSession);
+      notify({ type: 'error', title: t('terminal.connectionFailed'), message });
+    }
   };
   $('btnTermDisconnect').onclick = () => terminal.disconnect(true);
 
   $('modalMask').addEventListener('click', (ev) => {
-    if (ev.target === $('modalMask')) {
-      const done = modalResolve;
-      modalHide();
-      if (done) done({ confirmed: false, values: {} });
-    }
+    if (ev.target === $('modalMask')) modalCancelActive();
   });
+  document.addEventListener('keydown', handleModalKeydown);
   $('notificationPanel').addEventListener('click', (ev) => {
     const target = ev.target instanceof Element ? ev.target.closest('[data-notification-action]') : null;
     if (!target) return;
@@ -2257,14 +2689,33 @@ function bindUiEvents() {
     closeTermPalettePanel();
   });
   window.addEventListener('resize', () => {
+    scheduleViewportMetricsSync();
     syncMobileChromeState();
   });
+  window.addEventListener('orientationchange', scheduleViewportMetricsSync);
+  window.addEventListener('focusin', scheduleViewportMetricsSync);
+  window.addEventListener('focusout', () => {
+    setTimeout(scheduleViewportMetricsSync, 80);
+  });
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'visible') return;
+    scheduleViewportMetricsSync();
+    void resumeVisibleView();
+  });
+  window.addEventListener('online', () => handleNetworkStatusChange(true));
+  window.addEventListener('offline', () => handleNetworkStatusChange(false));
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', scheduleViewportMetricsSync);
+    window.visualViewport.addEventListener('scroll', scheduleViewportMetricsSync);
+  }
 
   bindRunnerListEvents();
   bindSessionListEvents();
 }
 
 async function bootstrap() {
+  syncViewportMetrics();
+  terminal.setNetworkStatus(state.networkOnline);
   currentLanguage = readLanguagePreference();
   currentTerminalPalette = readTerminalPalettePreference();
   applyLanguage(currentLanguage, false);
@@ -2273,6 +2724,7 @@ async function bootstrap() {
   setSummaryTiles();
   terminal.init();
   bindUiEvents();
+  void registerPwaWorker();
 
   try {
     const me = await refreshAuth();

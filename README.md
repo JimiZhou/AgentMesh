@@ -2,24 +2,25 @@
 
 > English version: [Switch to README.en.md](README.en.md)
 
-**通过浏览器在任意你拥有的机器上运行 Codex、Claude Code 和 Gemini CLI。**
+**通过浏览器在任意你拥有的机器上运行 Codex、Claude Agent 和 Gemini，并以 ACP 语义流方式重渲染。**
 
-AgentMesh 把强大的本地 AI 编程 Agent 搬进了浏览器。部署一个轻量 Gateway 服务端，再把任意数量的 Runner 机器连接上来——每台 Runner 都通过完整的 PTY 透传把本地工具（Codex、Claude、Gemini）的全屏 TUI 暴露在浏览器里。无需 SSH，无需 VNC，体验 1:1。
+AgentMesh 把强大的本地 AI 编程 Agent 搬进了浏览器。部署一个轻量 Gateway 服务端，再把任意数量的 Runner 机器连接上来。每台 Runner 作为本机 ACP client 接入本地 agent，把 `session/update`、工具调用、命令输出和权限请求转成结构化事件，再由 Web 端重新渲染成适合 PWA 手机使用的界面。无需 SSH，无需 VNC。
 
 ```
 浏览器 ──HTTPS──▶ Gateway ──WebSocket──▶ Runner（你的 Mac/Linux/服务器）
-                                              └─▶ Codex / Claude / Gemini TUI
+                                              └─▶ ACP Agent（Codex / Claude / Gemini）
 ```
 
 ---
 
 ## ✨ 特性
 
-- **完整 PTY 透传** — ANSI 色彩、光标键、全屏 TUI（Codex 全屏界面完整呈现）
+- **ACP 原生会话流** — 消息、计划、工具调用、命令输出、权限请求全部结构化传输
+- **移动端优先重渲染** — 不再把桌面 TUI 硬塞进手机屏幕，PWA 下使用体验更稳定
 - **Runner 出站连接** — Runner 主动拨号连接 Gateway（WebSocket），无需开放入站端口，NAT/防火墙/企业网均可用
 - **多 Runner 支持** — 连接任意数量的机器，在 Web 界面按需切换
 - **默认安全** — 密码 + TOTP（Google Authenticator）双因素登录、scrypt 哈希存储、会话级终端 Token、CSRF 防护
-- **工具自动识别** — Runner 自动上报已安装的 `codex`、`claude`、`gemini`，UI 只展示实际可用的工具
+- **工具自动识别** — Runner 自动上报可用的 ACP agent，默认接 `codex`、`claude`、`gemini`
 - **一行命令接入** — 用 `npx` 一键将新机器注册为 Runner
 
 ---
@@ -83,7 +84,11 @@ AGENTMESH_BOOTSTRAP_PASSWORD='你的强密码' npm --prefix gateway run start
 
 ## ⚡ 接入 Runner
 
-依赖：**Node.js 22+**、**tmux 3+**，以及至少一个已安装并在 PATH 中的：`codex`、`claude`、`gemini`。
+依赖：**Node.js 22+**，以及至少一个可用 ACP agent。默认支持：
+
+- `codex-acp` 或 `npx -y @zed-industries/codex-acp`
+- `claude-agent-acp` 或 `npx -y @zed-industries/claude-agent-acp`
+- `gemini --experimental-acp` 或 `npx -y @google/gemini-cli --experimental-acp`
 
 ### 第一步 — 生成绑定码
 
@@ -145,11 +150,11 @@ AGENTMESH_GEMINI_CMD=gemini
 
 | 工具 | 自动识别 | 方式 |
 |---|---|---|
-| Codex | ✅ | 检测 PATH 中 `codex`（或 `AGENTMESH_CODEX_CMD`） |
-| Claude Code | ✅ | 检测 PATH 中 `claude`（或 `AGENTMESH_CLAUDE_CMD`） |
-| Gemini CLI | ✅ | 优先 `gemini`，fallback `npx -y @google/gemini-cli` |
+| Codex | ✅ | 优先 `codex-acp`，fallback `npx -y @zed-industries/codex-acp` |
+| Claude Agent | ✅ | 优先 `claude-agent-acp`，fallback `npx -y @zed-industries/claude-agent-acp` |
+| Gemini CLI | ✅ | 优先 `gemini --experimental-acp`，fallback `npx -y @google/gemini-cli --experimental-acp` |
 
-Runner 连接后自动上报已发现的工具能力，Web UI 只展示当前选中 Runner 上实际可用的工具。
+Runner 连接后自动上报已发现的 ACP agent 能力，Web UI 只展示当前选中 Runner 上实际可用的工具。
 
 ---
 

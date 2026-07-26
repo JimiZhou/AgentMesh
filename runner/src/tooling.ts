@@ -9,11 +9,13 @@ export type ToolCommandSpec = {
   command: string;
   source: ToolCommandSource;
   note?: string;
+  protocol: 'acp';
 };
 export type ToolCommandMap = Record<ToolName, ToolCommandSpec>;
 export type ToolCapabilityDetail = {
   command: string;
   source: ToolCommandSource;
+  protocol: 'acp';
   available: boolean;
   reason?: string;
 };
@@ -45,9 +47,9 @@ function shellQuoteSingle(raw: string): string {
   return `'${String(raw || '').replace(/'/g, `'\\''`)}'`;
 }
 
-export function extractPrimaryCommand(rawCommand: string): string {
-  const raw = String(rawCommand || '').trim();
-  if (!raw) return '';
+export function splitCommand(commandLine: string): string[] {
+  const raw = String(commandLine || '').trim();
+  if (!raw) return [];
 
   const tokens: string[] = [];
   let current = '';
@@ -87,7 +89,11 @@ export function extractPrimaryCommand(rawCommand: string): string {
     current += ch;
   }
   if (current) tokens.push(current);
+  return tokens;
+}
 
+export function extractPrimaryCommand(rawCommand: string): string {
+  const tokens = splitCommand(rawCommand);
   for (const token of tokens) {
     if (/^[A-Za-z_][A-Za-z0-9_]*=.*/.test(token)) continue;
     return token;
@@ -141,30 +147,41 @@ export function resolveToolCommands(
   const geminiEnv = String(env.AGENTMESH_GEMINI_CMD || '').trim();
 
   const codex: ToolCommandSpec = codexEnv
-    ? { command: codexEnv, source: 'env' }
-    : { command: 'codex', source: 'default' };
-  const claude: ToolCommandSpec = claudeEnv
-    ? { command: claudeEnv, source: 'env' }
-    : { command: 'claude', source: 'default' };
+    ? { command: codexEnv, source: 'env', protocol: 'acp' }
+    : commandExistsFn('codex-acp')
+      ? { command: 'codex-acp', source: 'default', protocol: 'acp' }
+      : {
+          command: 'npx -y @zed-industries/codex-acp',
+          source: 'fallback',
+          protocol: 'acp',
+          note: 'using npm ACP adapter for Codex',
+        };
 
-  let gemini: ToolCommandSpec;
-  if (geminiEnv) {
-    gemini = { command: geminiEnv, source: 'env' };
-  } else if (commandExistsFn('gemini')) {
-    gemini = { command: 'gemini', source: 'default' };
-  } else if (commandExistsFn('npx')) {
-    gemini = {
-      command: 'npx -y @google/gemini-cli',
-      source: 'fallback',
-      note: 'gemini binary not found; using npx @google/gemini-cli fallback',
-    };
-  } else {
-    gemini = {
-      command: 'gemini',
-      source: 'default',
-      note: 'gemini binary not found and npx is unavailable',
-    };
-  }
+  const claude: ToolCommandSpec = claudeEnv
+    ? { command: claudeEnv, source: 'env', protocol: 'acp' }
+    : commandExistsFn('claude-agent-acp')
+      ? { command: 'claude-agent-acp', source: 'default', protocol: 'acp' }
+      : {
+          command: 'npx -y @zed-industries/claude-agent-acp',
+          source: 'fallback',
+          protocol: 'acp',
+          note: 'using npm ACP adapter for Claude Agent',
+        };
+
+  const gemini: ToolCommandSpec = geminiEnv
+    ? { command: geminiEnv, source: 'env', protocol: 'acp' }
+    : commandExistsFn('gemini')
+      ? {
+          command: 'gemini --experimental-acp',
+          source: 'default',
+          protocol: 'acp',
+        }
+      : {
+          command: 'npx -y @google/gemini-cli --experimental-acp',
+          source: 'fallback',
+          protocol: 'acp',
+          note: 'using npm Gemini CLI in ACP mode',
+        };
 
   return { codex, claude, gemini };
 }
@@ -175,39 +192,6 @@ export function supportedToolsFrom(availability: ToolAvailability): Set<ToolName
     if (availability[tool]) out.add(tool);
   }
   return out;
-}
-
-export function applySessionBackendConstraints(
-  detected: ToolDetectionResult,
-  requirements: { tmuxAvailable: boolean },
-): ToolDetectionResult {
-  if (requirements.tmuxAvailable) return detected;
-
-  const tools = { ...detected.tools } as ToolAvailability;
-  const toolDetails = { ...detected.toolDetails } as ToolCapabilityDetails;
-  for (const tool of TOOL_ORDER) {
-    tools[tool] = false;
-    const detail = toolDetails[tool];
-    const baseReason = detail.reason ? `${detail.reason}; ` : '';
-    toolDetails[tool] = {
-      ...detail,
-      available: false,
-      reason: `${baseReason}tmux is required on the runner host`,
-    };
-  }
-
-  const unsupported = TOOL_ORDER.map((tool) => ({
-    tool,
-    source: toolDetails[tool].source,
-    command: toolDetails[tool].command,
-    reason: toolDetails[tool].reason || 'unavailable',
-  }));
-
-  return {
-    tools,
-    toolDetails,
-    unsupported,
-  };
 }
 
 export function detectToolCapabilities(
@@ -223,6 +207,7 @@ export function detectToolCapabilities(
     toolDetails[tool] = {
       command: commandSpec.command,
       source: commandSpec.source,
+      protocol: 'acp',
       available: availability.available,
       reason: availability.reason || commandSpec.note,
     };

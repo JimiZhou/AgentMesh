@@ -28,7 +28,7 @@ export async function registerAdminRoutes(app, deps) {
         const oldPassword = typeof body.oldPassword === 'string' ? body.oldPassword : '';
         const newUser = typeof body.newUser === 'string' ? body.newUser.trim() : '';
         const newPassword = typeof body.newPassword === 'string' ? body.newPassword : '';
-        if (!deps.verifyWebPassword(oldPassword)) {
+        if (!(await deps.verifyWebPassword(oldPassword))) {
             reply.code(401);
             return { ok: false, error: 'invalid password' };
         }
@@ -48,6 +48,7 @@ export async function registerAdminRoutes(app, deps) {
             user: newUser || undefined,
             password: newPassword || undefined,
         });
+        deps.revokeAllSessions();
         // Force re-login
         deps.clearAuthCookie(req, reply);
         return { ok: true, relogin: true };
@@ -61,7 +62,7 @@ export async function registerAdminRoutes(app, deps) {
         const body = (req.body || {});
         const password = typeof body.password === 'string' ? body.password : '';
         const totp = typeof body.totp === 'string' ? body.totp.trim() : '';
-        if (!deps.verifyWebPassword(password)) {
+        if (!(await deps.verifyWebPassword(password))) {
             reply.code(401);
             return { ok: false, error: 'invalid password' };
         }
@@ -73,6 +74,7 @@ export async function registerAdminRoutes(app, deps) {
             }
         }
         deps.setTotpConfig({ enabled: false, provisioned: false, secretBase32: '' });
+        deps.revokeAllSessions();
         return { ok: true };
     });
     app.post('/api/admin/totp/enable', async (req, reply) => {
@@ -83,7 +85,7 @@ export async function registerAdminRoutes(app, deps) {
             return;
         const body = (req.body || {});
         const password = typeof body.password === 'string' ? body.password : '';
-        if (!deps.verifyWebPassword(password)) {
+        if (!(await deps.verifyWebPassword(password))) {
             reply.code(401);
             return { ok: false, error: 'invalid password' };
         }
@@ -101,7 +103,7 @@ export async function registerAdminRoutes(app, deps) {
         const body = (req.body || {});
         const password = typeof body.password === 'string' ? body.password : '';
         const totp = typeof body.totp === 'string' ? body.totp.trim() : '';
-        if (!deps.verifyWebPassword(password)) {
+        if (!(await deps.verifyWebPassword(password))) {
             reply.code(401);
             return { ok: false, error: 'invalid password' };
         }
@@ -113,6 +115,7 @@ export async function registerAdminRoutes(app, deps) {
             }
         }
         deps.setTotpConfig({ enabled: true, provisioned: false, secretBase32: '' });
+        deps.revokeAllSessions();
         deps.clearAuthCookie(req, reply);
         return { ok: true, relogin: true, needSetup: true };
     });

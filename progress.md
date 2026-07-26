@@ -1,6 +1,6 @@
 # AgentMesh Progress
 
-Last updated: 2026-03-04
+Last updated: 2026-07-27
 
 AgentMesh 目标：做一个 Gateway + Runner 的最小系统，把 Codex/Claude/Gemini 这类“本地终端型 coding agent”的交互体验，从 SSH/本机终端搬到 Web，并尽量做到 1:1（ANSI、光标、全屏 TUI、低延迟输入）。
 
@@ -15,7 +15,28 @@ AgentMesh 目标：做一个 Gateway + Runner 的最小系统，把 Codex/Claude
 
 ## What’s implemented (working today)
 
-### Incremental update (2026-03-04, latest)
+### Incremental update (2026-07-27, latest) — 全面审核与加固
+- Runner 稳定性：
+  - 断线重连不再销毁存活的 ACP 会话，交由 gateway `reconcile_sessions` 重新收养；send/emit 路由改为 mutable activeWs，重连后旧会话事件不丢；
+  - 修复 SIGTERM→SIGKILL 升级死代码（`child.killed` 语义误用），`finishSession` 不再泄漏仍在运行的 agent 进程；新增 SIGINT/SIGTERM 优雅关停；
+  - 终端快照 150ms 去抖，消除 O(n²) 快照流量；start_session 并发去重；被吊销的 runner 收到 1008 后明确报错退出，不再 0.5s 死循环重连；
+  - Token 改经 `Authorization: Bearer` 头传输，不再进 URL query，也不再进日志。
+- Gateway 安全与健壮性：
+  - Runner 上报的 sessionId 强制校验归属（防跨 runner 伪造与无界内存分配）；终端输出 64KB 截断上限；
+  - state/config 持久化改为 tmp+rename 原子写入，损坏文件备份为 `.corrupt-<ts>` 并高声报错，不再静默丢失全部凭证；
+  - 密码校验改异步 scrypt（不再阻塞事件循环），默认凭证检测按配置缓存；TOTP 防重放（记录最近使用的 counter）；
+  - runner/CSRF/用户名比较全部计时安全，登录失败不再提前短路（防用户名枚举）；改密/TOTP 变更时吊销所有 web 会话；
+  - Runner WS 心跳 ping/pong（2 次未响应即断开）；旧 socket close 竞态不再误判在线状态；浏览器慢客户端背压断开；loginAttempts 定期清理；
+  - session_exit 清理 pending 权限请求、不再覆盖 error 状态；清理 PTY 时代死代码（cols/rows、queueBytes 等）。
+- Web UI（PWA）：
+  - Service Worker 重写：不再缓存 `/api/*` 与 SSE 流（此前登出后仍显示已登录、事件流被无限缓存泄漏内存）；导航 network-first、静态资源 stale-while-revalidate，缓存名升至 v3；
+  - 修复删除 Runner 按钮引用未定义函数导致的功能完全失效；修复 deleteSession 定时器作用域错误；
+  - 流式渲染保留滚动位置与 `<details>` 展开态（此前每条消息重置到顶部）；connect() 加代际守卫修复会话切换竞态与 WS 泄漏；
+  - 登出/401 正确断开终端 WS，登录页不再无限重连；事件保留上限 2000 条 + toolCall Map 索引，长会话不再卡顿；
+  - 空状态按连接状态分支（connecting/error/ready）、starter prompts 接通、模态框焦点管理（Escape/焦点还原/Tab 圈定）、权限请求 aria-live、prefers-reduced-motion、移动端 44px 触控目标、iOS 输入 16px 防自动缩放、移动端 Enter 换行。
+- 文档：README.en.md 重写对齐 ACP 架构（原为 PTY 时代描述），删除已过时的 README.zh.md（README.md 即中文版）；.gitignore 覆盖 config 备份文件防止密钥入库。
+
+### Incremental update (2026-03-04)
 - Runner 绑定码（URL + token）已接入：
   - Gateway 新增 `POST /api/enroll/create` 生成一次性 enroll token，并输出 base64url 绑定码；
   - 绑定码 payload 包含 `gatewayHttp/gatewayWs/token/exp`，便于 runner 一次导入；

@@ -4,10 +4,14 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0f1722" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <title>AgentMesh</title>
   <meta name="description" content="AgentMesh 控制台，用于连接远端网关、管理本地 runner，并在浏览器中安全使用 Codex、Claude 和 Gemini CLI。" />
   <link rel="icon" href="data:," />
-  <link rel="stylesheet" href="/assets/xterm/xterm.css" />
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="/assets/ui/icon-app.svg" />
   <link rel="stylesheet" href="/assets/ui/styles.css" />
 </head>
 
@@ -315,33 +319,30 @@
 
       <section id="workspaceView" class="view hidden">
         <div class="view-stack">
-          <section class="stats-strip">
-            <article class="summary-tile">
-              <span class="summary-label" data-i18n="stats.onlineRunners">在线节点</span>
-              <strong id="statOnline">0</strong>
-              <span class="summary-meta" data-i18n="stats.onlineRunnersMeta">当前可接收任务的节点</span>
-            </article>
-            <article class="summary-tile">
-              <span class="summary-label" data-i18n="stats.offlineRunners">离线节点</span>
-              <strong id="statOffline">0</strong>
-              <span class="summary-meta" data-i18n="stats.offlineRunnersMeta">需要排查网络、服务或机器状态的节点</span>
-            </article>
-            <article class="summary-tile">
-              <span class="summary-label" data-i18n="stats.totalSessions">总会话数</span>
-              <strong id="statSessions">0</strong>
-              <span class="summary-meta" data-i18n="stats.totalSessionsMeta">当前网关可见的所有会话</span>
-            </article>
-            <article class="summary-tile">
-              <span class="summary-label" data-i18n="stats.activeSessions">活跃会话</span>
-              <strong id="statActiveSessions">0</strong>
-              <span class="summary-meta" data-i18n="stats.activeSessionsMeta">运行中 / 启动中 / 停止中</span>
-            </article>
+          <section class="panel workspace-launchpad">
+            <div class="workspace-launch-copy">
+              <span class="eyebrow" data-i18n="workspace.heroEyebrow">Start here</span>
+              <h2 data-i18n="workspace.heroTitle">登录后先选一个在线节点，然后直接开始 ACP coding。</h2>
+              <p class="section-copy" data-i18n="workspace.heroBody">AgentMesh 会用你选中的节点创建会话，接着把消息、计划、工具调用和文件改动都连续渲染出来。</p>
+            </div>
+            <div id="workspaceLaunchMetrics" class="workspace-launch-metrics"></div>
+            <div id="workspacePrimaryActions" class="workspace-primary-actions"></div>
+          </section>
+
+          <section id="workspaceRecentSection" class="panel workspace-recent hidden">
+            <div class="section-head compact">
+              <div>
+                <h3 data-i18n="workspace.recentTitle">继续最近会话</h3>
+                <p class="section-copy" data-i18n="workspace.recentCopy">如果你刚刚在手机上中断过，这里可以直接回到最近的 coding 流。</p>
+              </div>
+            </div>
+            <div id="workspaceRecentSessions" class="workspace-session-list"></div>
           </section>
 
           <section class="runner-list-head">
             <div>
               <h2 data-i18n="workspace.runnerListTitle">节点列表</h2>
-              <p class="section-copy" data-i18n="workspace.runnerListCopy">当前网关可见的所有节点，按在线状态和最近心跳排序。</p>
+              <p class="section-copy" data-i18n="workspace.runnerListCopy">优先选一个在线节点直接开工；节点详情和历史会话都退到次一级。</p>
             </div>
             <div id="cleanupResult" class="inline-feedback" role="status" aria-live="polite"></div>
           </section>
@@ -467,31 +468,6 @@
         <div class="terminal-shell">
           <section class="panel terminal-panel terminal-workspace">
             <div id="termHost" class="term-host"></div>
-
-            <div id="termMobileKeys" class="term-mobile-keys" data-i18n-aria-label="terminal.mobileKeys">
-              <p id="termHint" class="section-copy" data-i18n="terminal.hint">
-                移动端支持 Ctrl / Alt 锁定键、方向键长按连发，以及快速唤起软键盘。
-              </p>
-              <div class="term-mobile-dock" data-i18n-aria-label="terminal.sessionActionsGroup">
-                <button class="button ghost term-mobile-btn" data-term-key="ctrl" data-mod="ctrl" aria-pressed="false"
-                  type="button">Ctrl</button>
-                <button class="button ghost term-mobile-btn" data-term-key="alt" data-mod="alt" aria-pressed="false"
-                  type="button">Alt</button>
-                <button class="button ghost term-mobile-btn" data-term-key="esc" type="button">Esc</button>
-                <button class="button ghost term-mobile-btn" data-term-key="tab" type="button">Tab</button>
-                <button class="button ghost term-mobile-btn" data-term-key="ctrlc" type="button">Ctrl+C</button>
-                <button class="button ghost term-mobile-btn" data-term-key="ctrld" type="button">Ctrl+D</button>
-                <button class="button ghost term-mobile-btn" data-term-key="keyboard" type="button"
-                  data-i18n="terminal.keyboard">键盘</button>
-                <button class="button ghost term-mobile-btn" data-term-key="left" type="button">←</button>
-                <button class="button ghost term-mobile-btn" data-term-key="down" type="button">↓</button>
-                <button class="button ghost term-mobile-btn" data-term-key="up" type="button">↑</button>
-                <button class="button ghost term-mobile-btn" data-term-key="right" type="button">→</button>
-                <button class="button ghost term-mobile-btn" data-term-key="enter" type="button">Enter</button>
-                <button class="button ghost term-mobile-btn term-mobile-wide" data-term-key="backspace"
-                  type="button">⌫</button>
-              </div>
-            </div>
           </section>
         </div>
       </section>
@@ -514,8 +490,6 @@
     </div>
   </div>
 
-  <script src="/assets/xterm/xterm.js"></script>
-  <script src="/assets/xterm/xterm-addon-fit.js"></script>
   <script type="module" src="/assets/ui/app.js"></script>
 </body>
 

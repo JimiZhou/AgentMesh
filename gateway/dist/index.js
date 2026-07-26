@@ -11,6 +11,7 @@ import { readFileSync, promises as fs } from 'node:fs';
 import crypto from 'node:crypto';
 import { dirname, extname, join, normalize } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { promisify } from 'node:util';
 const PORT = Number(process.env.AGENTMESH_PORT || 8787);
 const HOST = process.env.AGENTMESH_HOST || '127.0.0.1';
 const DATA_FILE = process.env.AGENTMESH_DATA_FILE || new URL('../data/state.json', import.meta.url).pathname;
@@ -53,6 +54,7 @@ const PASSWORD_SCRYPT_N = 16384;
 const PASSWORD_SCRYPT_R = 8;
 const PASSWORD_SCRYPT_P = 1;
 const PASSWORD_KEYLEN = 32;
+const scryptAsync = promisify(crypto.scrypt);
 function hashPassword(rawPassword) {
     const salt = crypto.randomBytes(16);
     const derived = crypto.scryptSync(rawPassword, salt, PASSWORD_KEYLEN, {
@@ -70,7 +72,7 @@ function hashPassword(rawPassword) {
         derived.toString('base64url'),
     ].join('$');
 }
-function verifyPasswordHash(storedHash, rawPassword) {
+async function verifyPasswordHash(storedHash, rawPassword) {
     const parts = String(storedHash || '').split('$');
     if (parts.length !== 6)
         return false;
@@ -95,7 +97,7 @@ function verifyPasswordHash(storedHash, rawPassword) {
         return false;
     let actual;
     try {
-        actual = crypto.scryptSync(rawPassword, salt, expected.length, {
+        actual = await scryptAsync(rawPassword, salt, expected.length, {
             N,
             r,
             p,
@@ -150,7 +152,7 @@ function cfgWebPasswordHash() {
 function cfgLegacyWebPassword() {
     return String(cfg.web?.password || '');
 }
-function verifyWebPassword(rawPassword) {
+async function verifyWebPassword(rawPassword) {
     const hash = cfgWebPasswordHash();
     if (hash)
         return verifyPasswordHash(hash, rawPassword);
@@ -159,8 +161,16 @@ function verifyWebPassword(rawPassword) {
         return false;
     return timingSafeEqualString(legacy, rawPassword);
 }
-function isDefaultCredentialInUse() {
-    return cfgWebUser() === 'admin' && verifyWebPassword('agentmesh');
+let defaultCredentialCache = null;
+async function isDefaultCredentialInUse() {
+    const user = cfgWebUser();
+    const hash = cfgWebPasswordHash() || cfgLegacyWebPassword();
+    if (defaultCredentialCache && defaultCredentialCache.user === user && defaultCredentialCache.hash === hash) {
+        return defaultCredentialCache.value;
+    }
+    const value = user === 'admin' && (await verifyWebPassword('agentmesh'));
+    defaultCredentialCache = { user, hash, value };
+    return value;
 }
 function ensurePasswordHashConfigured() {
     reloadConfig();
@@ -212,9 +222,8 @@ function cfgPublicWs() {
 function cfgEnrollTokenTtlMs() {
     return Number(cfg.enroll?.tokenTtlMs || 10 * 60 * 1000);
 }
-const TERMINAL_GRANT_TTL_MS = Number(process.env.AGENTMESH_TERMINAL_GRANT_TTL_MS || 60 * 1000);
 const AUTH_COOKIE_NAME = 'agentmesh_sid';
-const app = Fastify({ logger: true, trustProxy: TRUST_PROXY });
+const app = Fastify({ logger: true, disableRequestLogging: true, trustProxy: TRUST_PROXY });
 await app.register(websocket);
 ensurePasswordHashConfigured();
 await registerAdminRoutes(app, {
@@ -225,6 +234,7 @@ await registerAdminRoutes(app, {
     checkCsrf: enforceCsrf,
     cfgWebUser,
     verifyWebPassword,
+    revokeAllSessions: revokeAllWebSessions,
     cfgTotpEnabled,
     cfgTotpProvisioned,
     cfgTotpSecret,
@@ -235,24 +245,20 @@ await registerAdminRoutes(app, {
     reloadConfig,
 });
 const store = new JsonStore(DATA_FILE);
-const sessionSnapshots = new Map();
-const sessionPtyBuffers = new Map();
 const uiSseClients = new Map();
 let uiUpdateVersion = 0;
 let uiUpdateFlushTimer = null;
-const sessionTerminalClients = new Map();
+const sessionActivityClients = new Map();
+const sessionActivities = new Map();
+const SESSION_ACTIVITY_MAX_EVENTS = 400;
+const SESSION_TERMINAL_OUTPUT_MAX_CHARS = 64 * 1024;
 const webSessions = new Map();
-const terminalGrants = new Map();
 const loginAttempts = new Map();
+function revokeAllWebSessions() {
+    webSessions.clear();
+}
 const enrollTokens = new Map();
-const BIN_MSG_PTY_DATA = 1;
-const BIN_MSG_PTY_INPUT = 2;
-const PTY_CHUNK_BYTES = 4096;
-const PTY_BUFFER_LIMIT_BYTES = 200000;
 const RUNNER_WS_BACKPRESSURE_LIMIT = 512 * 1024;
-const TERMINAL_WS_BACKPRESSURE_LIMIT = 512 * 1024;
-const TERMINAL_WS_HARD_LIMIT = 2 * 1024 * 1024;
-const TERMINAL_DROP_LOG_EVERY = 256;
 const LOGIN_WINDOW_MS = Number(process.env.AGENTMESH_LOGIN_WINDOW_MS || 10 * 60 * 1000);
 const LOGIN_MAX_ATTEMPTS = Number(process.env.AGENTMESH_LOGIN_MAX_ATTEMPTS || 10);
 const LOGIN_BLOCK_MS = Number(process.env.AGENTMESH_LOGIN_BLOCK_MS || 15 * 60 * 1000);
@@ -269,21 +275,6 @@ const metrics = {
     enrollIssued: 0,
     enrollConsumed: 0,
     enrollRejected: 0,
-    terminalGrantIssued: 0,
-    terminalGrantDenied: 0,
-    terminalConnectionsOpened: 0,
-    terminalConnectionsClosed: 0,
-    terminalFramesOut: 0,
-    terminalBytesOut: 0,
-    terminalFramesDropped: 0,
-    terminalSlowClientClosed: 0,
-    runnerBinaryFramesIn: 0,
-    runnerBinaryBytesIn: 0,
-    runnerInputFramesOut: 0,
-    runnerInputBytesOut: 0,
-    runnerInputDrops: 0,
-    ptyBufferTrimOps: 0,
-    ptyBufferBytesCurrent: 0,
     reconcileRequests: 0,
     reconcileResults: 0,
     reconcileSessionUpdates: 0,
@@ -340,6 +331,7 @@ function hotp(secret, counter, digits = 6) {
     const mod = 10 ** digits;
     return String(code % mod).padStart(digits, '0');
 }
+let totpLastUsedCounter = -1;
 function totpVerify(base32Secret, token, window = 1, stepSeconds = 30) {
     const t = String(token || '').replace(/\s+/g, '');
     if (!/^\d{6}$/.test(t))
@@ -349,9 +341,14 @@ function totpVerify(base32Secret, token, window = 1, stepSeconds = 30) {
         return false;
     const nowCounter = Math.floor(Date.now() / 1000 / stepSeconds);
     for (let w = -window; w <= window; w += 1) {
-        const expected = hotp(secret, nowCounter + w, 6);
-        if (timingSafeEqualString(expected, t))
+        const counter = nowCounter + w;
+        const expected = hotp(secret, counter, 6);
+        if (timingSafeEqualString(expected, t)) {
+            if (counter <= totpLastUsedCounter)
+                return false;
+            totpLastUsedCounter = counter;
             return true;
+        }
     }
     return false;
 }
@@ -387,25 +384,12 @@ function parseCookieHeader(raw) {
     }
     return out;
 }
-function parseWebSocketProtocols(raw) {
-    return String(raw || '')
-        .split(',')
-        .map((x) => x.trim())
-        .filter(Boolean);
-}
 function extractBearerToken(rawHeader) {
     const raw = String(rawHeader || '').trim();
     if (!raw)
         return '';
     const m = /^Bearer\s+(.+)$/i.exec(raw);
     return m ? m[1].trim() : '';
-}
-function extractTokenFromProtocolHeader(rawHeader) {
-    for (const proto of parseWebSocketProtocols(rawHeader)) {
-        if (proto.startsWith('token.'))
-            return proto.slice('token.'.length).trim();
-    }
-    return '';
 }
 function escapeHtml(raw) {
     return String(raw || '')
@@ -624,41 +608,6 @@ function patchStore(mutator) {
     store.patch(mutator);
     scheduleUiUpdate();
 }
-function encodeBinaryFrame(kind, sessionId, payload) {
-    const sid = Buffer.from(sessionId, 'utf8');
-    if (sid.length > 255)
-        throw new Error('session id too long');
-    const header = Buffer.from([kind, sid.length]);
-    return Buffer.concat([header, sid, payload]);
-}
-function decodeBinaryFrame(raw) {
-    if (!raw || raw.length < 2)
-        return null;
-    const kind = raw.readUInt8(0);
-    const sidLen = raw.readUInt8(1);
-    const sidStart = 2;
-    const sidEnd = sidStart + sidLen;
-    if (raw.length < sidEnd)
-        return null;
-    return {
-        kind,
-        sessionId: raw.subarray(sidStart, sidEnd).toString('utf8'),
-        payload: raw.subarray(sidEnd),
-    };
-}
-function rawDataToBuffer(data) {
-    if (Buffer.isBuffer(data))
-        return data;
-    if (Array.isArray(data))
-        return Buffer.concat(data);
-    return Buffer.from(data);
-}
-function normalizeDim(value, fallback) {
-    const n = Number(value);
-    if (!Number.isFinite(n))
-        return fallback;
-    return Math.min(400, Math.max(20, Math.floor(n)));
-}
 function parseBoolFlag(value) {
     const raw = String(value ?? '').trim().toLowerCase();
     return raw === '1' || raw === 'true' || raw === 'yes' || raw === 'on';
@@ -686,16 +635,95 @@ function sanitizeRunner(runner) {
         online: !!runnerOnline.has(rest.id),
     };
 }
-function clearSessionArtifacts(sessionId) {
-    sessionSnapshots.delete(sessionId);
-    const prev = sessionPtyBuffers.get(sessionId);
-    if (prev) {
-        metrics.ptyBufferBytesCurrent = Math.max(0, metrics.ptyBufferBytesCurrent - prev.length);
+function getSessionActivityState(sessionId) {
+    const existing = sessionActivities.get(sessionId);
+    if (existing)
+        return existing;
+    const created = {
+        events: [],
+        terminals: {},
+        pendingPermissions: {},
+        meta: {},
+    };
+    sessionActivities.set(sessionId, created);
+    return created;
+}
+function broadcastSessionActivity(sessionId, payload) {
+    const clients = sessionActivityClients.get(sessionId);
+    if (!clients || !clients.size)
+        return;
+    const raw = JSON.stringify(payload);
+    for (const client of clients) {
+        try {
+            const sock = client.ws;
+            if (sock.readyState !== 1)
+                continue;
+            if (Number(sock.bufferedAmount || 0) > RUNNER_WS_BACKPRESSURE_LIMIT) {
+                client.ws.close(1013, 'backpressure');
+                continue;
+            }
+            client.ws.send(raw);
+        }
+        catch {
+            // ignore broken clients; close handler will clean up
+        }
     }
-    sessionPtyBuffers.delete(sessionId);
-    const clients = sessionTerminalClients.get(sessionId);
-    if (clients) {
-        for (const client of clients) {
+}
+function snapshotSessionActivity(sessionId) {
+    const state = getSessionActivityState(sessionId);
+    return {
+        events: state.events,
+        terminals: state.terminals,
+        pendingPermissions: state.pendingPermissions,
+        meta: state.meta,
+    };
+}
+function pushSessionActivityEvent(sessionId, event) {
+    const state = getSessionActivityState(sessionId);
+    state.events.push(event);
+    if (state.events.length > SESSION_ACTIVITY_MAX_EVENTS) {
+        state.events.splice(0, state.events.length - SESSION_ACTIVITY_MAX_EVENTS);
+    }
+    broadcastSessionActivity(sessionId, { type: 'activity_event', event });
+}
+function updateSessionActivityMeta(sessionId, patch) {
+    const state = getSessionActivityState(sessionId);
+    if (patch.agentInfo !== undefined)
+        state.meta.agentInfo = patch.agentInfo;
+    if (patch.authMethods !== undefined)
+        state.meta.authMethods = patch.authMethods;
+    if (patch.agentCapabilities !== undefined)
+        state.meta.agentCapabilities = patch.agentCapabilities;
+    broadcastSessionActivity(sessionId, { type: 'activity_meta', meta: state.meta });
+}
+function updateSessionTerminal(sessionId, terminal) {
+    const state = getSessionActivityState(sessionId);
+    if (terminal.output.length > SESSION_TERMINAL_OUTPUT_MAX_CHARS) {
+        terminal = {
+            ...terminal,
+            output: terminal.output.slice(terminal.output.length - SESSION_TERMINAL_OUTPUT_MAX_CHARS),
+            truncated: true,
+        };
+    }
+    state.terminals[terminal.terminalId] = terminal;
+    broadcastSessionActivity(sessionId, { type: 'terminal_snapshot', terminal });
+}
+function setPendingPermission(sessionId, permission) {
+    const state = getSessionActivityState(sessionId);
+    state.pendingPermissions[permission.requestId] = permission;
+    broadcastSessionActivity(sessionId, { type: 'permission_pending', permission });
+}
+function clearPendingPermission(sessionId, requestId) {
+    const state = getSessionActivityState(sessionId);
+    if (!state.pendingPermissions[requestId])
+        return;
+    delete state.pendingPermissions[requestId];
+    broadcastSessionActivity(sessionId, { type: 'permission_resolved', requestId });
+}
+function clearSessionArtifacts(sessionId) {
+    const activityClients = sessionActivityClients.get(sessionId);
+    if (activityClients) {
+        for (const client of activityClients) {
             try {
                 client.ws.close(1000, 'session deleted');
             }
@@ -703,8 +731,9 @@ function clearSessionArtifacts(sessionId) {
                 // ignore close errors
             }
         }
-        sessionTerminalClients.delete(sessionId);
+        sessionActivityClients.delete(sessionId);
     }
+    sessionActivities.delete(sessionId);
 }
 function cleanupRunnerConnection(runnerId) {
     const conn = runnerConns.get(runnerId);
@@ -731,111 +760,6 @@ function setSessionStatus(sessionId, patch) {
             return;
         Object.assign(session, patch);
     });
-}
-function relayPtyInputToRunner(sessionId, dataBuf) {
-    const session = getSession(sessionId);
-    if (!session)
-        return { ok: false, code: 404, error: 'session not found' };
-    const conn = runnerConns.get(session.runnerId);
-    if (!conn)
-        return { ok: false, code: 409, error: 'runner offline' };
-    if (!dataBuf.length)
-        return { ok: true };
-    if (conn.bufferedAmount > RUNNER_WS_BACKPRESSURE_LIMIT) {
-        metrics.runnerInputDrops += 1;
-        return { ok: false, code: 429, error: 'runner ws busy; retry' };
-    }
-    for (let i = 0; i < dataBuf.length; i += PTY_CHUNK_BYTES) {
-        const chunk = dataBuf.subarray(i, i + PTY_CHUNK_BYTES);
-        const frame = encodeBinaryFrame(BIN_MSG_PTY_INPUT, sessionId, chunk);
-        conn.send(frame, { binary: true });
-        metrics.runnerInputFramesOut += 1;
-        metrics.runnerInputBytesOut += chunk.length;
-    }
-    return { ok: true };
-}
-function relayResizeToRunner(sessionId, cols, rows) {
-    const session = getSession(sessionId);
-    if (!session)
-        return { ok: false, code: 404, error: 'session not found' };
-    const conn = runnerConns.get(session.runnerId);
-    if (!conn)
-        return { ok: false, code: 409, error: 'runner offline' };
-    conn.send(JSON.stringify({ type: 'pty_resize', sessionId, cols, rows, ts: Date.now() }));
-    return { ok: true };
-}
-function appendPtyData(sessionId, chunk) {
-    if (!chunk.length)
-        return;
-    const prev = sessionPtyBuffers.get(sessionId) || Buffer.alloc(0);
-    const next = prev.length ? Buffer.concat([prev, chunk]) : chunk;
-    const trimmed = next.subarray(Math.max(0, next.length - PTY_BUFFER_LIMIT_BYTES));
-    sessionPtyBuffers.set(sessionId, trimmed);
-    metrics.ptyBufferBytesCurrent += trimmed.length - prev.length;
-    if (trimmed.length < next.length)
-        metrics.ptyBufferTrimOps += 1;
-    // Fan-out to connected browser terminal clients with slow-client drop policy.
-    const clients = sessionTerminalClients.get(sessionId);
-    if (!clients || !clients.size)
-        return;
-    for (const client of clients) {
-        const ws = client.ws;
-        if (ws.readyState !== 1 /* OPEN */)
-            continue;
-        const buffered = Number(ws.bufferedAmount || 0);
-        if (buffered > TERMINAL_WS_HARD_LIMIT) {
-            try {
-                ws.close(1013, 'terminal slow client');
-            }
-            catch {
-                // ignore close failures
-            }
-            metrics.terminalSlowClientClosed += 1;
-            continue;
-        }
-        if (buffered > TERMINAL_WS_BACKPRESSURE_LIMIT) {
-            client.droppedFrames += 1;
-            metrics.terminalFramesDropped += 1;
-            if (client.droppedFrames % TERMINAL_DROP_LOG_EVERY === 0) {
-                app.log.warn({ sessionId, droppedFrames: client.droppedFrames, buffered }, 'terminal client dropping frames');
-            }
-            continue;
-        }
-        try {
-            ws.send(chunk, { binary: true });
-            metrics.terminalFramesOut += 1;
-            metrics.terminalBytesOut += chunk.length;
-        }
-        catch {
-            // ignore
-        }
-    }
-}
-function issueTerminalGrant(sessionId, user) {
-    const now = Date.now();
-    const grant = {
-        token: nanoid(26),
-        sessionId,
-        user,
-        createdAt: now,
-        expiresAt: now + TERMINAL_GRANT_TTL_MS,
-    };
-    terminalGrants.set(grant.token, grant);
-    metrics.terminalGrantIssued += 1;
-    return grant;
-}
-function consumeTerminalGrant(token, sessionId, user) {
-    const grant = terminalGrants.get(token);
-    if (!grant)
-        return null;
-    terminalGrants.delete(token);
-    if (grant.expiresAt <= Date.now())
-        return null;
-    if (grant.sessionId !== sessionId)
-        return null;
-    if (grant.user !== user)
-        return null;
-    return grant;
 }
 function sendReconcileRequest(runnerId, ws) {
     const knownSessions = Object.values(store.get().sessions)
@@ -888,7 +812,6 @@ function applyReconcileResult(runnerId, activeSessionsRaw) {
     metrics.reconcileSessionUpdates += updates;
 }
 function snapshotGatewayMetrics() {
-    const terminalClientCount = Array.from(sessionTerminalClients.values()).reduce((sum, set) => sum + set.size, 0);
     const runnerBufferedAmount = {};
     for (const [runnerId, ws] of runnerConns.entries()) {
         runnerBufferedAmount[runnerId] = Number(ws.bufferedAmount || 0);
@@ -902,11 +825,8 @@ function snapshotGatewayMetrics() {
         uptimeMs: Date.now() - metrics.startedAt,
         runnerOnlineCount: runnerOnline.size,
         runnerOnlineIds: Array.from(runnerOnline.values()),
-        terminalClientCount,
-        terminalGrantCount: terminalGrants.size,
         enrollTokenCount: enrollTokens.size,
         webSessionCount: webSessions.size,
-        ptyBufferSessionCount: sessionPtyBuffers.size,
         runnerBufferedAmount,
         runnerLastMetrics: runnerMetricsObj,
     };
@@ -919,13 +839,16 @@ setInterval(() => {
             metrics.authSessionExpired += 1;
         }
     }
-    for (const [token, grant] of terminalGrants.entries()) {
-        if (grant.expiresAt <= now)
-            terminalGrants.delete(token);
-    }
     for (const [token, enroll] of enrollTokens.entries()) {
         if (enroll.expiresAt <= now)
             enrollTokens.delete(token);
+    }
+    for (const [key, attempt] of loginAttempts.entries()) {
+        const expired = attempt.blockedUntil > 0
+            ? attempt.blockedUntil <= now
+            : now - attempt.firstTs > LOGIN_WINDOW_MS;
+        if (expired)
+            loginAttempts.delete(key);
     }
 }, 30_000).unref();
 const BASE_CSP = [
@@ -955,7 +878,7 @@ app.addHook('onSend', async (req, reply, payload) => {
 });
 app.addHook('onRequest', async (req, reply) => {
     const path = String(req.url || '').split('?')[0] || '/';
-    if (path === '/health' || path === '/' || path === '/ws/runner' || path === '/ws/terminal')
+    if (path === '/health' || path === '/' || path === '/ws/runner' || path === '/ws/session')
         return;
     if (path === '/api/auth/login' || path === '/api/auth/me' || path === '/api/runners/register' || path === '/api/runners/enroll')
         return;
@@ -973,7 +896,7 @@ app.addHook('onRequest', async (req, reply) => {
     const method = String(req.method || 'GET').toUpperCase();
     if (method === 'POST' || method === 'PUT' || method === 'PATCH' || method === 'DELETE') {
         const csrf = String(req.headers['x-agentmesh-csrf'] || '');
-        if (!csrf || csrf !== session.csrfToken) {
+        if (!csrf || !timingSafeEqualString(csrf, session.csrfToken)) {
             reply.code(403).send({ ok: false, error: 'csrf mismatch' });
             return reply;
         }
@@ -992,16 +915,52 @@ function enforceCsrf(req, reply, session) {
     if (!(method === 'POST' || method === 'PUT' || method === 'PATCH' || method === 'DELETE'))
         return true;
     const csrf = String(req.headers['x-agentmesh-csrf'] || '');
-    if (!csrf || csrf !== session.csrfToken) {
+    if (!csrf || !timingSafeEqualString(csrf, session.csrfToken)) {
         reply.code(403).send({ ok: false, error: 'csrf mismatch' });
         return false;
     }
     return true;
 }
 app.get('/health', async () => ({ ok: true, name: 'agentmesh-gateway', ts: Date.now() }));
+let uiHtmlCache = null;
 app.get('/', async (_req, reply) => {
-    const html = readFileSync(UI_FILE, 'utf-8');
-    reply.type('text/html; charset=utf-8').send(html);
+    if (uiHtmlCache === null)
+        uiHtmlCache = readFileSync(UI_FILE, 'utf-8');
+    reply.type('text/html; charset=utf-8').send(uiHtmlCache);
+});
+app.get('/manifest.webmanifest', async (_req, reply) => {
+    reply.type('application/manifest+json; charset=utf-8').send({
+        name: 'AgentMesh',
+        short_name: 'AgentMesh',
+        description: 'ACP-native mobile console for Codex, Claude, and Gemini sessions.',
+        start_url: '/',
+        scope: '/',
+        display: 'standalone',
+        background_color: '#0f1722',
+        theme_color: '#0f1722',
+        icons: [
+            {
+                src: '/assets/ui/icon-app.svg',
+                type: 'image/svg+xml',
+                sizes: 'any',
+                purpose: 'any maskable',
+            },
+        ],
+    });
+});
+app.get('/sw.js', async (_req, reply) => {
+    try {
+        const body = await fs.readFile(join(ASSETS_DIR, 'ui', 'sw.js'));
+        reply
+            .header('Service-Worker-Allowed', '/')
+            .type('application/javascript; charset=utf-8')
+            .send(body);
+        return;
+    }
+    catch {
+        reply.code(404);
+        return { ok: false, error: 'asset not found' };
+    }
 });
 function generateTotpSecretBase32(bytes = 20) {
     const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
@@ -1235,7 +1194,9 @@ app.post('/api/auth/login', async (req, reply) => {
     const password = typeof body.password === 'string' ? body.password : '';
     const totp = typeof body.totp === 'string' ? body.totp.trim() : '';
     reloadConfig();
-    if (username !== cfgWebUser() || !verifyWebPassword(password)) {
+    const userOk = timingSafeEqualString(username, cfgWebUser());
+    const passwordOk = await verifyWebPassword(password);
+    if (!userOk || !passwordOk) {
         metrics.authFailures += 1;
         noteLoginFailure(req);
         reply.code(401);
@@ -1268,7 +1229,7 @@ app.post('/api/auth/login', async (req, reply) => {
         csrfToken: session.csrfToken,
         expiresAt: session.expiresAt,
         security: {
-            defaultPassword: isDefaultCredentialInUse(),
+            defaultPassword: await isDefaultCredentialInUse(),
             totpProvisioned: cfgTotpProvisioned(),
             totpEnabled: cfgTotpEnabled(),
         },
@@ -1295,7 +1256,7 @@ app.get('/api/auth/me', async (req, reply) => {
         csrfToken: session.csrfToken,
         expiresAt: session.expiresAt,
         security: {
-            defaultPassword: isDefaultCredentialInUse(),
+            defaultPassword: await isDefaultCredentialInUse(),
             totpProvisioned: cfgTotpProvisioned(),
             totpEnabled: cfgTotpEnabled(),
         },
@@ -1660,7 +1621,7 @@ app.get('/ws/runner', { websocket: true }, (conn, req) => {
     const tokenFromAuth = extractBearerToken(String(req.headers.authorization || ''));
     const token = tokenFromAuth || tokenFromQuery;
     const runner = store.get().runners[runnerId];
-    if (!runner || runner.token !== token) {
+    if (!runner || !token || !timingSafeEqualString(runner.token, token)) {
         ws.close(1008, 'unauthorized');
         return;
     }
@@ -1668,13 +1629,49 @@ app.get('/ws/runner', { websocket: true }, (conn, req) => {
         if (s.runners[runnerId])
             s.runners[runnerId].lastSeenAt = Date.now();
     });
+    const previousConn = runnerConns.get(runnerId);
+    if (previousConn && previousConn !== ws) {
+        try {
+            previousConn.close(1000, 'superseded by new connection');
+        }
+        catch {
+            // ignore close errors
+        }
+    }
     runnerOnline.add(runnerId);
     runnerConns.set(runnerId, ws);
     scheduleUiUpdate();
     ws.send(JSON.stringify({ type: 'hello', runnerId, ts: Date.now() }));
     sendReconcileRequest(runnerId, ws);
+    let missedPongs = 0;
+    ws.on('pong', () => {
+        missedPongs = 0;
+    });
+    const pingTimer = setInterval(() => {
+        if (missedPongs >= 2) {
+            app.log.warn({ runnerId }, 'runner ws unresponsive; terminating');
+            try {
+                ws.terminate();
+            }
+            catch {
+                // ignore terminate errors
+            }
+            return;
+        }
+        missedPongs += 1;
+        try {
+            ws.ping();
+        }
+        catch {
+            // ignore ping errors
+        }
+    }, 20_000);
+    pingTimer.unref();
     ws.on('close', (code, reason) => {
         app.log.info({ runnerId, code, reason: reason?.toString() || '' }, 'runner ws closed');
+        clearInterval(pingTimer);
+        if (runnerConns.get(runnerId) !== ws)
+            return;
         runnerOnline.delete(runnerId);
         runnerConns.delete(runnerId);
         scheduleUiUpdate();
@@ -1683,34 +1680,15 @@ app.get('/ws/runner', { websocket: true }, (conn, req) => {
         app.log.error({ runnerId, err: err?.message || err }, 'runner ws error');
     });
     ws.on('message', (data, isBinary) => {
-        if (isBinary) {
-            const raw = rawDataToBuffer(data);
-            const parsed = decodeBinaryFrame(raw);
-            if (!parsed) {
-                app.log.warn({ runnerId }, 'invalid binary ws frame');
-                return;
-            }
-            metrics.runnerBinaryFramesIn += 1;
-            metrics.runnerBinaryBytesIn += parsed.payload.length;
-            if (parsed.kind === BIN_MSG_PTY_DATA) {
-                appendPtyData(parsed.sessionId, parsed.payload);
-                return;
-            }
-            app.log.warn({ runnerId, kind: parsed.kind }, 'unknown binary ws frame kind');
+        if (isBinary)
             return;
-        }
         try {
             const msg = JSON.parse(data.toString());
-            if (msg?.type === 'pty_data' && typeof msg.sessionId === 'string' && typeof msg.data === 'string') {
-                const payload = Buffer.from(msg.data, 'utf8');
-                metrics.runnerBinaryFramesIn += 1;
-                metrics.runnerBinaryBytesIn += payload.length;
-                appendPtyData(msg.sessionId, payload);
-                return;
-            }
-            if (msg?.type === 'snapshot_result' && typeof msg.sessionId === 'string' && typeof msg.text === 'string') {
-                sessionSnapshots.set(msg.sessionId, { ts: Date.now(), text: msg.text });
-                return;
+            let session = null;
+            if (msg?.sessionId !== undefined) {
+                session = typeof msg.sessionId === 'string' ? getSession(msg.sessionId) : null;
+                if (!session || session.runnerId !== runnerId)
+                    return;
             }
             if (msg?.type === 'capabilities') {
                 patchStore((s) => {
@@ -1729,8 +1707,6 @@ app.get('/ws/runner', { websocket: true }, (conn, req) => {
             if (msg?.type === 'runner_metrics') {
                 runnerLastMetrics.set(runnerId, {
                     ts: Date.now(),
-                    queueBytes: Number(msg.queueBytes || 0),
-                    queueFrames: Number(msg.queueFrames || 0),
                     counters: msg.counters || {},
                     activeSessions: Array.isArray(msg.activeSessions) ? msg.activeSessions : [],
                 });
@@ -1744,11 +1720,23 @@ app.get('/ws/runner', { websocket: true }, (conn, req) => {
                         lastError: undefined,
                         exitedAt: undefined,
                     });
+                    updateSessionActivityMeta(msg.sessionId, {
+                        agentInfo: msg.agentInfo || null,
+                        authMethods: Array.isArray(msg.authMethods) ? msg.authMethods : [],
+                        agentCapabilities: msg.agentCapabilities || null,
+                    });
                 }
                 else {
                     setSessionStatus(msg.sessionId, {
                         status: 'error',
                         lastError: typeof msg.error === 'string' ? msg.error : 'start session failed',
+                    });
+                    pushSessionActivityEvent(msg.sessionId, {
+                        id: nanoid(10),
+                        type: 'system',
+                        ts: Date.now(),
+                        level: 'error',
+                        message: typeof msg.error === 'string' ? msg.error : 'start session failed',
                     });
                 }
                 return;
@@ -1763,7 +1751,80 @@ app.get('/ws/runner', { websocket: true }, (conn, req) => {
                 return;
             }
             if (msg?.type === 'session_exit' && typeof msg.sessionId === 'string') {
-                setSessionStatus(msg.sessionId, { status: 'exited', exitedAt: Date.now() });
+                if (session?.status === 'error') {
+                    setSessionStatus(msg.sessionId, { exitedAt: Date.now() });
+                }
+                else {
+                    setSessionStatus(msg.sessionId, { status: 'exited', exitedAt: Date.now() });
+                }
+                const state = sessionActivities.get(msg.sessionId);
+                if (state) {
+                    for (const requestId of Object.keys(state.pendingPermissions)) {
+                        clearPendingPermission(msg.sessionId, requestId);
+                    }
+                    state.terminals = {};
+                }
+                pushSessionActivityEvent(msg.sessionId, {
+                    id: nanoid(10),
+                    type: 'system',
+                    ts: Date.now(),
+                    level: 'info',
+                    message: 'session exited',
+                });
+                return;
+            }
+            if (msg?.type === 'acp_update' && typeof msg.sessionId === 'string') {
+                pushSessionActivityEvent(msg.sessionId, {
+                    id: nanoid(10),
+                    type: 'update',
+                    ts: Number(msg.ts || Date.now()),
+                    update: msg.update,
+                });
+                return;
+            }
+            if (msg?.type === 'acp_system' && typeof msg.sessionId === 'string' && typeof msg.message === 'string') {
+                pushSessionActivityEvent(msg.sessionId, {
+                    id: nanoid(10),
+                    type: 'system',
+                    ts: Number(msg.ts || Date.now()),
+                    level: msg.level === 'error' ? 'error' : 'info',
+                    message: msg.message,
+                });
+                return;
+            }
+            if (msg?.type === 'prompt_result' && typeof msg.sessionId === 'string') {
+                pushSessionActivityEvent(msg.sessionId, {
+                    id: nanoid(10),
+                    type: 'prompt_result',
+                    ts: Number(msg.ts || Date.now()),
+                    promptId: typeof msg.promptId === 'string' ? msg.promptId : null,
+                    ok: msg.ok !== false,
+                    stopReason: typeof msg.stopReason === 'string' ? msg.stopReason : null,
+                    usage: msg.usage || null,
+                    userMessageId: typeof msg.userMessageId === 'string' ? msg.userMessageId : null,
+                    error: typeof msg.error === 'string' ? msg.error : undefined,
+                });
+                return;
+            }
+            if (msg?.type === 'acp_terminal' && typeof msg.sessionId === 'string' && typeof msg.terminalId === 'string') {
+                updateSessionTerminal(msg.sessionId, {
+                    terminalId: msg.terminalId,
+                    output: typeof msg.output === 'string' ? msg.output : '',
+                    truncated: msg.truncated === true,
+                    exitStatus: msg.exitStatus || undefined,
+                    ts: Number(msg.ts || Date.now()),
+                });
+                return;
+            }
+            if (msg?.type === 'acp_permission_request'
+                && typeof msg.sessionId === 'string'
+                && typeof msg.requestId === 'string') {
+                setPendingPermission(msg.sessionId, {
+                    requestId: msg.requestId,
+                    toolCall: msg.toolCall || null,
+                    options: Array.isArray(msg.options) ? msg.options : [],
+                    ts: Number(msg.ts || Date.now()),
+                });
                 return;
             }
         }
@@ -1772,20 +1833,10 @@ app.get('/ws/runner', { websocket: true }, (conn, req) => {
         }
     });
 });
-// Browser terminal WS: client connects with ?sessionId=... and token via Sec-WebSocket-Protocol.
-app.get('/ws/terminal', { websocket: true }, (conn, req) => {
+app.get('/ws/session', { websocket: true }, (conn, req) => {
     const ws = conn.socket || conn;
     if (!isOriginAllowed(req)) {
         ws.close(1008, 'origin not allowed');
-        return;
-    }
-    const url = new URL(req.url || '', `http://${req.headers.host}`);
-    const sessionId = url.searchParams.get('sessionId') || '';
-    const tokenFromQuery = url.searchParams.get('token') || '';
-    const tokenFromProtocol = extractTokenFromProtocolHeader(String(req.headers['sec-websocket-protocol'] || ''));
-    const terminalToken = tokenFromProtocol || tokenFromQuery;
-    if (!sessionId || !terminalToken) {
-        ws.close(1008, 'missing sessionId/token');
         return;
     }
     const webSession = getWebSessionFromRequest(req);
@@ -1793,6 +1844,8 @@ app.get('/ws/terminal', { websocket: true }, (conn, req) => {
         ws.close(1008, 'unauthorized');
         return;
     }
+    const url = new URL(req.url || '', `http://${req.headers.host}`);
+    const sessionId = url.searchParams.get('sessionId') || '';
     const session = getSession(sessionId);
     if (!session) {
         ws.close(1008, 'session not found');
@@ -1802,66 +1855,24 @@ app.get('/ws/terminal', { websocket: true }, (conn, req) => {
         ws.close(1008, 'forbidden');
         return;
     }
-    const grant = consumeTerminalGrant(terminalToken, sessionId, webSession.user);
-    if (!grant) {
-        ws.close(1008, 'invalid terminal token');
+    const client = { ws };
+    const set = sessionActivityClients.get(sessionId) || new Set();
+    set.add(client);
+    sessionActivityClients.set(sessionId, set);
+    try {
+        ws.send(JSON.stringify({ type: 'activity_snapshot', snapshot: snapshotSessionActivity(sessionId) }));
+    }
+    catch {
+        ws.close(1011, 'snapshot failed');
         return;
     }
-    const client = { ws, droppedFrames: 0 };
-    const set = sessionTerminalClients.get(sessionId) || new Set();
-    set.add(client);
-    sessionTerminalClients.set(sessionId, set);
-    metrics.terminalConnectionsOpened += 1;
-    // Send buffered tail immediately so UI has context.
-    const buf = sessionPtyBuffers.get(sessionId);
-    if (buf && buf.length) {
-        try {
-            ws.send(buf, { binary: true });
-        }
-        catch {
-            // ignore
-        }
-    }
     ws.on('close', () => {
-        const clients = sessionTerminalClients.get(sessionId);
-        if (clients) {
-            clients.delete(client);
-            if (!clients.size)
-                sessionTerminalClients.delete(sessionId);
-        }
-        metrics.terminalConnectionsClosed += 1;
-    });
-    ws.on('message', (data, isBinary) => {
-        if (isBinary) {
-            const result = relayPtyInputToRunner(sessionId, rawDataToBuffer(data));
-            if (!result.ok) {
-                app.log.debug({ sessionId, error: result.error }, 'terminal binary input dropped');
-            }
+        const clients = sessionActivityClients.get(sessionId);
+        if (!clients)
             return;
-        }
-        // Compatibility mode for old browser clients using JSON messages.
-        let msg;
-        try {
-            msg = JSON.parse(data.toString());
-        }
-        catch {
-            return;
-        }
-        if (msg?.type === 'input' && typeof msg.data === 'string') {
-            const result = relayPtyInputToRunner(sessionId, Buffer.from(msg.data, 'utf8'));
-            if (!result.ok) {
-                app.log.debug({ sessionId, error: result.error }, 'terminal json input dropped');
-            }
-            return;
-        }
-        if (msg?.type === 'resize') {
-            const cols = normalizeDim(msg.cols, 120);
-            const rows = normalizeDim(msg.rows, 34);
-            const result = relayResizeToRunner(sessionId, cols, rows);
-            if (!result.ok) {
-                app.log.debug({ sessionId, error: result.error }, 'terminal resize dropped');
-            }
-        }
+        clients.delete(client);
+        if (!clients.size)
+            sessionActivityClients.delete(sessionId);
     });
 });
 app.post('/api/sessions', async (req, reply) => {
@@ -1948,6 +1959,24 @@ app.get('/api/sessions/:id', async (req, reply) => {
     }
     return { ok: true, session };
 });
+app.get('/api/sessions/:id/activity', async (req, reply) => {
+    const authSession = getWebSessionFromRequest(req);
+    if (!authSession) {
+        reply.code(401);
+        return { ok: false, error: 'unauthorized' };
+    }
+    const sessionId = req.params.id;
+    const session = getSession(sessionId);
+    if (!session) {
+        reply.code(404);
+        return { ok: false, error: 'session not found' };
+    }
+    if (!requireSessionAccess(session, authSession.user)) {
+        reply.code(403);
+        return { ok: false, error: 'forbidden' };
+    }
+    return { ok: true, sessionId, activity: snapshotSessionActivity(sessionId) };
+});
 app.post('/api/sessions/:id/start', async (req, reply) => {
     const authSession = getWebSessionFromRequest(req);
     if (!authSession) {
@@ -1992,16 +2021,12 @@ app.post('/api/sessions/:id/start', async (req, reply) => {
     const projectPath = typeof body.projectPath === 'string' && body.projectPath.trim()
         ? body.projectPath.trim()
         : session.projectPath || project?.path || null;
-    const cols = normalizeDim(body.cols, 120);
-    const rows = normalizeDim(body.rows, 34);
     const cmd = {
         type: 'start_session',
         sessionId,
         tool: session.tool,
         projectId: session.projectId,
         projectPath,
-        cols,
-        rows,
         ts: Date.now(),
     };
     app.log.debug({ runnerId: session.runnerId, sessionId, tool: session.tool, projectPath }, 'start_session send');
@@ -2024,6 +2049,117 @@ app.post('/api/sessions/:id/start', async (req, reply) => {
         projectPath: projectPath || undefined,
     });
     return { ok: true, sent: true, status: 'starting', projectPath };
+});
+app.post('/api/sessions/:id/prompt', async (req, reply) => {
+    const authSession = getWebSessionFromRequest(req);
+    if (!authSession) {
+        reply.code(401);
+        return { ok: false, error: 'unauthorized' };
+    }
+    const sessionId = req.params.id;
+    const session = getSession(sessionId);
+    if (!session) {
+        reply.code(404);
+        return { ok: false, error: 'session not found' };
+    }
+    if (!requireSessionAccess(session, authSession.user)) {
+        reply.code(403);
+        return { ok: false, error: 'forbidden' };
+    }
+    const conn = runnerConns.get(session.runnerId);
+    if (!conn) {
+        reply.code(409);
+        return { ok: false, error: 'runner offline' };
+    }
+    const body = (req.body || {});
+    const text = typeof body.text === 'string' ? body.text.trim() : '';
+    if (!text) {
+        reply.code(400);
+        return { ok: false, error: 'empty prompt' };
+    }
+    const promptId = nanoid(12);
+    try {
+        conn.send(JSON.stringify({ type: 'prompt_session', sessionId, promptId, text, ts: Date.now() }));
+    }
+    catch {
+        reply.code(500);
+        return { ok: false, error: 'ws send failed' };
+    }
+    return { ok: true, sessionId, promptId };
+});
+app.post('/api/sessions/:id/cancel', async (req, reply) => {
+    const authSession = getWebSessionFromRequest(req);
+    if (!authSession) {
+        reply.code(401);
+        return { ok: false, error: 'unauthorized' };
+    }
+    const sessionId = req.params.id;
+    const session = getSession(sessionId);
+    if (!session) {
+        reply.code(404);
+        return { ok: false, error: 'session not found' };
+    }
+    if (!requireSessionAccess(session, authSession.user)) {
+        reply.code(403);
+        return { ok: false, error: 'forbidden' };
+    }
+    if (session.status !== 'running' && session.status !== 'starting') {
+        reply.code(409);
+        return { ok: false, error: `cannot cancel session in status ${session.status}` };
+    }
+    const conn = runnerConns.get(session.runnerId);
+    if (!conn) {
+        reply.code(409);
+        return { ok: false, error: 'runner offline' };
+    }
+    try {
+        conn.send(JSON.stringify({ type: 'cancel_session_prompt', sessionId, ts: Date.now() }));
+    }
+    catch {
+        reply.code(500);
+        return { ok: false, error: 'ws send failed' };
+    }
+    return { ok: true, sessionId };
+});
+app.post('/api/sessions/:id/permission', async (req, reply) => {
+    const authSession = getWebSessionFromRequest(req);
+    if (!authSession) {
+        reply.code(401);
+        return { ok: false, error: 'unauthorized' };
+    }
+    const sessionId = req.params.id;
+    const session = getSession(sessionId);
+    if (!session) {
+        reply.code(404);
+        return { ok: false, error: 'session not found' };
+    }
+    if (!requireSessionAccess(session, authSession.user)) {
+        reply.code(403);
+        return { ok: false, error: 'forbidden' };
+    }
+    const state = getSessionActivityState(sessionId);
+    const body = (req.body || {});
+    const requestId = typeof body.requestId === 'string' ? body.requestId.trim() : '';
+    const optionId = typeof body.optionId === 'string' ? body.optionId.trim() : '';
+    const cancelled = body.cancelled === true || !optionId;
+    if (!requestId || !state.pendingPermissions[requestId]) {
+        reply.code(404);
+        return { ok: false, error: 'permission request not found' };
+    }
+    const conn = runnerConns.get(session.runnerId);
+    if (!conn) {
+        reply.code(409);
+        return { ok: false, error: 'runner offline' };
+    }
+    try {
+        conn.send(JSON.stringify({ type: 'permission_response', sessionId, requestId, optionId, cancelled, ts: Date.now() }));
+    }
+    catch {
+        reply.code(500);
+        return { ok: false, error: 'ws send failed' };
+    }
+    clearPendingPermission(sessionId, requestId);
+    return { ok: true, sessionId, requestId };
 });
 app.post('/api/sessions/:id/stop', async (req, reply) => {
     const authSession = getWebSessionFromRequest(req);
@@ -2116,156 +2252,6 @@ app.delete('/api/sessions/:id', async (req, reply) => {
         removedProjectId,
         forced: runningLike && force,
     };
-});
-app.post('/api/sessions/:id/terminal-token', async (req, reply) => {
-    const authSession = getWebSessionFromRequest(req);
-    if (!authSession) {
-        reply.code(401);
-        return { ok: false, error: 'unauthorized' };
-    }
-    const sessionId = req.params.id;
-    const session = getSession(sessionId);
-    if (!session) {
-        reply.code(404);
-        return { ok: false, error: 'session not found' };
-    }
-    if (!requireSessionAccess(session, authSession.user)) {
-        metrics.terminalGrantDenied += 1;
-        reply.code(403);
-        return { ok: false, error: 'forbidden' };
-    }
-    const grant = issueTerminalGrant(sessionId, authSession.user);
-    return {
-        ok: true,
-        sessionId,
-        token: grant.token,
-        expiresAt: grant.expiresAt,
-    };
-});
-app.get('/api/sessions/:id/snapshot/latest', async (req, reply) => {
-    const authSession = getWebSessionFromRequest(req);
-    if (!authSession) {
-        reply.code(401);
-        return { ok: false, error: 'unauthorized' };
-    }
-    const sessionId = req.params.id;
-    const session = getSession(sessionId);
-    if (!session) {
-        reply.code(404);
-        return { ok: false, error: 'session not found' };
-    }
-    if (!requireSessionAccess(session, authSession.user)) {
-        reply.code(403);
-        return { ok: false, error: 'forbidden' };
-    }
-    const snap = sessionSnapshots.get(sessionId);
-    if (!snap) {
-        reply.code(404);
-        return { ok: false, error: 'no snapshot yet' };
-    }
-    return { ok: true, sessionId, ...snap };
-});
-app.get('/api/sessions/:id/snapshot', async (req, reply) => {
-    const authSession = getWebSessionFromRequest(req);
-    if (!authSession) {
-        reply.code(401);
-        return { ok: false, error: 'unauthorized' };
-    }
-    const sessionId = req.params.id;
-    const session = getSession(sessionId);
-    if (!session) {
-        reply.code(404);
-        return { ok: false, error: 'session not found' };
-    }
-    if (!requireSessionAccess(session, authSession.user)) {
-        reply.code(403);
-        return { ok: false, error: 'forbidden' };
-    }
-    const conn = runnerConns.get(session.runnerId);
-    if (!conn) {
-        reply.code(409);
-        return { ok: false, error: 'runner offline' };
-    }
-    const requestId = nanoid(10);
-    conn.send(JSON.stringify({ type: 'snapshot', requestId, sessionId, ts: Date.now() }));
-    return { ok: true, requestId };
-});
-app.get('/api/sessions/:id/pty/latest', async (req, reply) => {
-    const authSession = getWebSessionFromRequest(req);
-    if (!authSession) {
-        reply.code(401);
-        return { ok: false, error: 'unauthorized' };
-    }
-    const sessionId = req.params.id;
-    const session = getSession(sessionId);
-    if (!session) {
-        reply.code(404);
-        return { ok: false, error: 'session not found' };
-    }
-    if (!requireSessionAccess(session, authSession.user)) {
-        reply.code(403);
-        return { ok: false, error: 'forbidden' };
-    }
-    const buf = sessionPtyBuffers.get(sessionId);
-    if (!buf || !buf.length) {
-        reply.code(404);
-        return { ok: false, error: 'no pty data yet' };
-    }
-    return { ok: true, sessionId, ts: Date.now(), data: buf.toString('utf8') };
-});
-app.post('/api/sessions/:id/pty/input', async (req, reply) => {
-    const authSession = getWebSessionFromRequest(req);
-    if (!authSession) {
-        reply.code(401);
-        return { ok: false, error: 'unauthorized' };
-    }
-    const sessionId = req.params.id;
-    const session = getSession(sessionId);
-    if (!session) {
-        reply.code(404);
-        return { ok: false, error: 'session not found' };
-    }
-    if (!requireSessionAccess(session, authSession.user)) {
-        reply.code(403);
-        return { ok: false, error: 'forbidden' };
-    }
-    const body = (req.body || {});
-    const dataBuf = typeof body.dataBase64 === 'string'
-        ? Buffer.from(body.dataBase64, 'base64')
-        : Buffer.from(typeof body.data === 'string' ? body.data : '', 'utf8');
-    const result = relayPtyInputToRunner(sessionId, dataBuf);
-    if (!result.ok) {
-        reply.code(result.code || 500);
-        return { ok: false, error: result.error || 'failed to relay input' };
-    }
-    app.log.debug({ runnerId: session.runnerId, sessionId, n: dataBuf.length }, 'pty_input relayed');
-    return { ok: true, sentBytes: dataBuf.length };
-});
-app.post('/api/sessions/:id/pty/resize', async (req, reply) => {
-    const authSession = getWebSessionFromRequest(req);
-    if (!authSession) {
-        reply.code(401);
-        return { ok: false, error: 'unauthorized' };
-    }
-    const sessionId = req.params.id;
-    const session = getSession(sessionId);
-    if (!session) {
-        reply.code(404);
-        return { ok: false, error: 'session not found' };
-    }
-    if (!requireSessionAccess(session, authSession.user)) {
-        reply.code(403);
-        return { ok: false, error: 'forbidden' };
-    }
-    const body = (req.body || {});
-    const cols = normalizeDim(body.cols, 120);
-    const rows = normalizeDim(body.rows, 34);
-    const result = relayResizeToRunner(sessionId, cols, rows);
-    if (!result.ok) {
-        reply.code(result.code || 500);
-        return { ok: false, error: result.error || 'failed to relay resize' };
-    }
-    return { ok: true };
 });
 app.get('/api/sessions', async (req, reply) => {
     const authSession = getWebSessionFromRequest(req);

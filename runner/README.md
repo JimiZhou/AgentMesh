@@ -1,6 +1,6 @@
 # agentmesh-runner
 
-Runner client for [AgentMesh](https://github.com/JimiZhou/AgentMesh) — connects your machine to an AgentMesh gateway to run Codex, Claude, and Gemini sessions via browser.
+Runner client for [AgentMesh](https://github.com/JimiZhou/AgentMesh) — connects your machine to an AgentMesh gateway and runs ACP-native Codex, Claude, and Gemini sessions via browser.
 
 ## Quick start
 
@@ -27,8 +27,8 @@ npx agentmesh-runner --gateway https://your-gateway.example.com
 ## Requirements
 
 - Node.js 22+
-- `tmux` 3+
-- At least one of: `codex`, `claude`, `gemini` in your PATH
+- At least one ACP-compatible agent available locally
+- Default support: `codex-acp`, `claude-agent-acp`, or `gemini --experimental-acp`
 
 ## Full documentation
 

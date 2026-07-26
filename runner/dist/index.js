@@ -1,21 +1,15 @@
 import os from 'node:os';
 import path from 'node:path';
+import { randomUUID } from 'node:crypto';
 import { WebSocket } from 'ws';
-import { Buffer } from 'node:buffer';
 import { loadIdentity, saveIdentity } from './state.js';
-import { spawnCodexPty, resizePty, killPty } from './pty.js';
-import { applySessionBackendConstraints, commandExists, detectToolCapabilities, resolveToolCommands, supportedToolsFrom, } from './tooling.js';
+import { AcpRunnerSession } from './acp-session.js';
+import { detectToolCapabilities, resolveToolCommands, supportedToolsFrom, } from './tooling.js';
 let gatewayHttp = process.env.AGENTMESH_GATEWAY_HTTP || 'http://127.0.0.1:8787';
 let gatewayWs = process.env.AGENTMESH_GATEWAY_WS || gatewayHttp.replace(/^http/, 'ws');
 const RUNNER_NAME = process.env.AGENTMESH_RUNNER_NAME || os.hostname();
 const ID_FILE = process.env.AGENTMESH_RUNNER_ID_FILE || new URL('../data/identity.json', import.meta.url).pathname;
 const ENROLL_CODE = String(process.env.AGENTMESH_ENROLL_CODE || '').trim();
-const BIN_MSG_PTY_DATA = 1;
-const BIN_MSG_PTY_INPUT = 2;
-const WS_FLUSH_BATCH = 48;
-const WS_BACKPRESSURE_LIMIT = 256 * 1024;
-const WS_QUEUE_LIMIT_BYTES = 2 * 1024 * 1024;
-const PTY_CHUNK_BYTES = 4096;
 const METRICS_HEARTBEAT_MS = Number(process.env.AGENTMESH_RUNNER_METRICS_HEARTBEAT_MS || 5000);
 const RUNNER_DEBUG = parseEnvBool(process.env.AGENTMESH_RUNNER_DEBUG, false);
 let toolCommands = resolveToolCommands();
@@ -23,6 +17,13 @@ let localCapabilities = detectCapabilities();
 let supportedTools = supportedToolsFrom(localCapabilities.tools);
 gatewayHttp = gatewayHttp.trim().replace(/\/+$/, '');
 gatewayWs = gatewayWs.trim().replace(/\/+$/, '');
+const counters = {
+    outboundMessages: 0,
+    outboundBytes: 0,
+    promptsSubmitted: 0,
+    permissionRequests: 0,
+    terminalSpawns: 0,
+};
 function parseEnvBool(raw, fallback) {
     if (typeof raw !== 'string')
         return fallback;
@@ -67,8 +68,12 @@ function logDebug(message, extra) {
     }
     console.log('[runner][debug]', message, extra);
 }
-process.on('uncaughtException', (e) => { logError('uncaughtException', e); });
-process.on('unhandledRejection', (e) => { logError('unhandledRejection', e); });
+process.on('uncaughtException', (e) => {
+    logError('uncaughtException', e);
+});
+process.on('unhandledRejection', (e) => {
+    logError('unhandledRejection', e);
+});
 function parseEnrollCode(rawCode) {
     const raw = rawCode.trim();
     if (!raw)
@@ -87,7 +92,7 @@ function parseEnrollCode(rawCode) {
     catch (e) {
         throw new Error(`invalid enroll code json: ${e?.message || e}`);
     }
-    if (!payload || typeof payload.token !== 'string' || !payload.token.trim()) {
+    if (!payload || typeof payload !== 'object' || typeof payload.token !== 'string') {
         throw new Error('invalid enroll code payload: token missing');
     }
     const exp = Number(payload.exp || 0);
@@ -95,24 +100,6 @@ function parseEnrollCode(rawCode) {
         throw new Error('enroll code expired');
     }
     return payload;
-}
-async function registerRunner() {
-    const capabilities = refreshLocalCapabilities();
-    const res = await fetch(`${gatewayHttp}/api/runners/register`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: RUNNER_NAME, capabilities }),
-    });
-    if (!res.ok) {
-        const text = await res.text();
-        throw new Error(`register failed: ${res.status} ${text}`);
-    }
-    const j = await res.json();
-    if (!j?.runnerId || !j?.runnerToken)
-        throw new Error(`bad register response: ${JSON.stringify(j)}`);
-    const id = { runnerId: j.runnerId, runnerToken: j.runnerToken, createdAt: Date.now() };
-    saveIdentity(ID_FILE, id);
-    return id;
 }
 async function enrollRunner(enrollCode) {
     const capabilities = refreshLocalCapabilities();
@@ -149,8 +136,7 @@ async function enrollRunner(enrollCode) {
     return id;
 }
 function detectCapabilities() {
-    const tmuxAvailable = commandExists('tmux');
-    const detected = applySessionBackendConstraints(detectToolCapabilities(toolCommands), { tmuxAvailable });
+    const detected = detectToolCapabilities(toolCommands);
     const { tools, toolDetails, unsupported } = detected;
     if (unsupported.length) {
         logWarn('tool unavailable on this host', { unsupported });
@@ -159,7 +145,7 @@ function detectCapabilities() {
         tools,
         toolDetails,
         features: {
-            tmux: commandExists('tmux'),
+            acp: true,
         },
         platform: {
             os: process.platform,
@@ -183,176 +169,102 @@ async function ensureIdentity() {
     return enrollRunner(ENROLL_CODE);
 }
 function resolveProjectPath(projectPath) {
-    const p = typeof projectPath === 'string' && projectPath.trim() ? projectPath.trim() : process.cwd();
-    return path.resolve(p);
+    const raw = typeof projectPath === 'string' && projectPath.trim() ? projectPath.trim() : process.cwd();
+    return path.resolve(raw);
 }
-function encodeBinaryFrame(kind, sessionId, payload) {
-    const sid = Buffer.from(sessionId, 'utf8');
-    if (sid.length > 255)
-        throw new Error('session id too long');
-    return Buffer.concat([Buffer.from([kind, sid.length]), sid, payload]);
+function serializeMessage(message) {
+    return JSON.stringify(message);
 }
-function decodeBinaryFrame(raw) {
-    if (!raw || raw.length < 2)
-        return null;
-    const kind = raw.readUInt8(0);
-    const sidLen = raw.readUInt8(1);
-    const sidStart = 2;
-    const sidEnd = sidStart + sidLen;
-    if (raw.length < sidEnd)
-        return null;
-    return {
-        kind,
-        sessionId: raw.subarray(sidStart, sidEnd).toString('utf8'),
-        payload: raw.subarray(sidEnd),
-    };
-}
-function rawDataToBuffer(data) {
-    if (Buffer.isBuffer(data))
-        return data;
-    if (Array.isArray(data))
-        return Buffer.concat(data);
-    return Buffer.from(data);
+function snapshotActiveSessions(sessions) {
+    return Array.from(sessions.values()).map((session) => ({
+        sessionId: session.sessionId,
+        tool: session.tool,
+        cwd: session.cwd,
+        createdAt: session.createdAt,
+    }));
 }
 async function connectLoop() {
+    const identity = await ensureIdentity();
     let attempt = 0;
     const sessions = new Map();
-    const sessionTools = new Map();
+    const pendingSessions = new Set();
+    let activeWs = null;
+    const send = (message) => {
+        if (!activeWs || activeWs.readyState !== WebSocket.OPEN)
+            return;
+        const raw = serializeMessage(message);
+        activeWs.send(raw);
+        counters.outboundMessages += 1;
+        counters.outboundBytes += Buffer.byteLength(raw, 'utf8');
+    };
+    const emitFromSession = (message) => {
+        if (message.type === 'acp_permission_request')
+            counters.permissionRequests += 1;
+        if (message.type === 'session_exit' && typeof message.sessionId === 'string') {
+            sessions.delete(message.sessionId);
+        }
+        send(message);
+    };
+    const stopAllSessions = async () => {
+        for (const [sessionId, session] of sessions.entries()) {
+            await session.stop().catch(() => undefined);
+            sessions.delete(sessionId);
+        }
+    };
+    let shuttingDown = false;
+    const shutdown = (signal) => {
+        if (shuttingDown)
+            return;
+        shuttingDown = true;
+        logInfo(`received ${signal}; stopping sessions`);
+        void stopAllSessions().finally(() => process.exit(0));
+    };
+    process.once('SIGINT', () => shutdown('SIGINT'));
+    process.once('SIGTERM', () => shutdown('SIGTERM'));
     while (true) {
         attempt += 1;
+        const runnerWsBase = gatewayWs.replace(/^http/i, 'ws');
+        const wsUrl = `${runnerWsBase}/ws/runner?runnerId=${encodeURIComponent(identity.runnerId)}`;
+        logInfo(`connecting to ${wsUrl}`);
+        let closeCode = 0;
         try {
-            const id = await ensureIdentity();
-            const wsUrl = `${gatewayWs}/ws/runner?runnerId=${encodeURIComponent(id.runnerId)}`;
-            logInfo(`connecting ws gateway=${gatewayWs} runnerId=${id.runnerId}`);
             const ws = new WebSocket(wsUrl, {
-                headers: {
-                    Authorization: `Bearer ${id.runnerToken}`,
-                },
+                headers: { Authorization: `Bearer ${identity.runnerToken}` },
             });
+            activeWs = ws;
+            let wsClosed = false;
+            let metricsTimer = null;
             await new Promise((resolve, reject) => {
                 ws.once('open', () => resolve());
-                ws.once('error', (e) => reject(e));
+                ws.once('error', reject);
             });
-            refreshLocalCapabilities();
-            attempt = 0;
-            logInfo('ws connected', { runnerId: id.runnerId });
-            let wsClosed = false;
-            const outQueue = [];
-            let queuedBytes = 0;
-            let flushTimer = null;
-            let metricsTimer = null;
-            const counters = {
-                framesQueued: 0,
-                bytesQueued: 0,
-                framesSent: 0,
-                bytesSent: 0,
-                framesDropped: 0,
-                bytesDropped: 0,
-                queueHighWatermarkBytes: 0,
-            };
-            const flushOutgoing = () => {
+            logInfo('runner websocket connected');
+            send({ type: 'capabilities', capabilities: localCapabilities, ts: Date.now() });
+            metricsTimer = setInterval(() => {
                 if (wsClosed || ws.readyState !== WebSocket.OPEN)
                     return;
-                let sent = 0;
-                while (outQueue.length && sent < WS_FLUSH_BATCH) {
-                    if (ws.bufferedAmount > WS_BACKPRESSURE_LIMIT)
-                        break;
-                    const frame = outQueue.shift();
-                    queuedBytes -= frame.length;
-                    counters.framesSent += 1;
-                    counters.bytesSent += frame.length;
-                    ws.send(frame, { binary: true }, (err) => {
-                        if (err)
-                            logError('ws send(binary) failed', err?.message || err);
-                    });
-                    sent += 1;
-                }
-                if (!outQueue.length && flushTimer) {
-                    clearInterval(flushTimer);
-                    flushTimer = null;
-                }
-            };
-            const enqueuePtyData = (sessionId, data) => {
-                if (!data)
-                    return;
-                const raw = Buffer.from(data, 'utf8');
-                for (let i = 0; i < raw.length; i += PTY_CHUNK_BYTES) {
-                    const chunk = raw.subarray(i, i + PTY_CHUNK_BYTES);
-                    const frame = encodeBinaryFrame(BIN_MSG_PTY_DATA, sessionId, chunk);
-                    outQueue.push(frame);
-                    queuedBytes += frame.length;
-                    counters.framesQueued += 1;
-                    counters.bytesQueued += frame.length;
-                    if (queuedBytes > counters.queueHighWatermarkBytes)
-                        counters.queueHighWatermarkBytes = queuedBytes;
-                }
-                while (queuedBytes > WS_QUEUE_LIMIT_BYTES && outQueue.length) {
-                    const dropped = outQueue.shift();
-                    queuedBytes -= dropped.length;
-                    counters.framesDropped += 1;
-                    counters.bytesDropped += dropped.length;
-                }
-                if (queuedBytes > WS_QUEUE_LIMIT_BYTES * 0.8) {
-                    logWarn('pty queue high watermark', { queuedBytes, frames: outQueue.length });
-                }
-                if (!flushTimer)
-                    flushTimer = setInterval(flushOutgoing, 12);
-                flushOutgoing();
-            };
-            const snapshotActiveSessions = () => Array.from(sessions.entries()).map(([sessionId, ps]) => ({
-                sessionId,
-                tool: sessionTools.get(sessionId) || 'unknown',
-                cwd: ps.cwd,
-                createdAt: ps.createdAt,
-                cols: ps.cols,
-                rows: ps.rows,
-            }));
+                send({
+                    type: 'runner_metrics',
+                    ts: Date.now(),
+                    counters,
+                    activeSessions: snapshotActiveSessions(sessions),
+                });
+            }, METRICS_HEARTBEAT_MS);
             ws.on('error', (e) => {
-                logError('ws error', e?.message || e);
+                logError('ws error', e);
             });
             ws.on('close', (code, reason) => {
                 wsClosed = true;
-                if (flushTimer) {
-                    clearInterval(flushTimer);
-                    flushTimer = null;
-                }
+                closeCode = code;
                 if (metricsTimer) {
                     clearInterval(metricsTimer);
                     metricsTimer = null;
                 }
                 logWarn(`ws closed code=${code} reason=${reason?.toString() || ''}`);
             });
-            ws.send(JSON.stringify({ type: 'capabilities', capabilities: localCapabilities, ts: Date.now() }));
-            metricsTimer = setInterval(() => {
-                if (wsClosed || ws.readyState !== WebSocket.OPEN)
-                    return;
-                ws.send(JSON.stringify({
-                    type: 'runner_metrics',
-                    ts: Date.now(),
-                    queueBytes: queuedBytes,
-                    queueFrames: outQueue.length,
-                    counters,
-                    activeSessions: snapshotActiveSessions(),
-                }));
-            }, METRICS_HEARTBEAT_MS);
             ws.on('message', async (data, isBinary) => {
-                if (isBinary) {
-                    const parsed = decodeBinaryFrame(rawDataToBuffer(data));
-                    if (!parsed) {
-                        logWarn('invalid binary frame');
-                        return;
-                    }
-                    if (parsed.kind === BIN_MSG_PTY_INPUT) {
-                        const ps = sessions.get(parsed.sessionId);
-                        if (!ps)
-                            return;
-                        if (parsed.payload.length)
-                            ps.pty.write(parsed.payload.toString('utf8'));
-                        return;
-                    }
-                    logWarn('unknown binary frame kind', parsed.kind);
+                if (isBinary)
                     return;
-                }
                 const raw = data.toString();
                 let msg;
                 try {
@@ -362,116 +274,153 @@ async function connectLoop() {
                     logDebug('msg(raw)', raw.slice(0, 2000));
                     return;
                 }
+                attempt = 0;
                 if (msg?.type === 'hello') {
                     logDebug(`hello from gateway runnerId=${msg.runnerId}`);
                     return;
                 }
                 if (msg?.type === 'reconcile_sessions') {
-                    ws.send(JSON.stringify({
+                    send({
                         type: 'reconcile_sessions_result',
                         ts: Date.now(),
-                        activeSessions: snapshotActiveSessions(),
-                    }));
+                        activeSessions: snapshotActiveSessions(sessions),
+                    });
                     return;
                 }
                 if (msg?.type === 'start_session') {
-                    logDebug('got start_session', msg);
+                    const sessionId = String(msg.sessionId || '');
+                    const tool = String(msg.tool || '').toLowerCase();
                     try {
-                        const sessionId = String(msg.sessionId || '');
-                        const tool = String(msg.tool || '').toLowerCase();
-                        const projectPath = resolveProjectPath(msg.projectPath);
-                        const cols = Number(msg.cols || 120);
-                        const rows = Number(msg.rows || 34);
                         if (!sessionId || !supportedTools.has(tool)) {
                             const supportedList = Array.from(supportedTools.values()).join('|') || 'none';
-                            ws.send(JSON.stringify({
+                            send({
                                 type: 'start_session_result',
                                 ok: false,
                                 sessionId,
                                 error: `unsupported tool: ${tool || '<empty>'}; supported=${supportedList}`,
-                            }));
+                                ts: Date.now(),
+                            });
                             return;
                         }
-                        if (sessions.has(sessionId)) {
-                            ws.send(JSON.stringify({ type: 'start_session_result', ok: false, sessionId, error: 'session already exists' }));
+                        if (sessions.has(sessionId) || pendingSessions.has(sessionId)) {
+                            send({
+                                type: 'start_session_result',
+                                ok: false,
+                                sessionId,
+                                error: 'session already exists',
+                                ts: Date.now(),
+                            });
                             return;
                         }
-                        const ps = spawnCodexPty(sessionId, projectPath, cols, rows);
-                        logInfo('spawned pty', { sessionId, pid: ps.pty.pid, tool });
-                        sessions.set(sessionId, ps);
-                        sessionTools.set(sessionId, tool);
-                        ps.pty.onData((chunk) => {
-                            enqueuePtyData(sessionId, chunk);
-                        });
-                        // Start tool *after* onData is wired so we don't miss the initial screen.
-                        ps.pty.write(`${toolCommands[tool].command}\r`);
-                        ps.pty.onExit(() => {
-                            sessions.delete(sessionId);
-                            sessionTools.delete(sessionId);
-                            if (ws.readyState === WebSocket.OPEN) {
-                                ws.send(JSON.stringify({ type: 'session_exit', sessionId, ts: Date.now() }));
-                            }
-                        });
-                        ws.send(JSON.stringify({ type: 'start_session_result', ok: true, sessionId, ts: Date.now() }));
+                        pendingSessions.add(sessionId);
+                        try {
+                            const session = await AcpRunnerSession.start({
+                                sessionId,
+                                tool,
+                                cwd: resolveProjectPath(msg.projectPath),
+                                spec: toolCommands[tool],
+                                emit: emitFromSession,
+                            });
+                            sessions.set(sessionId, session);
+                            logInfo('started ACP session', { sessionId, tool, cwd: session.cwd });
+                        }
+                        finally {
+                            pendingSessions.delete(sessionId);
+                        }
                     }
-                    catch (e) {
-                        logError('start_session error', e);
-                        ws.send(JSON.stringify({
+                    catch (error) {
+                        logError('start_session error', error);
+                        send({
                             type: 'start_session_result',
                             ok: false,
-                            sessionId: msg?.sessionId,
-                            error: e?.message || String(e),
+                            sessionId,
+                            error: error?.message || String(error),
                             ts: Date.now(),
-                        }));
+                        });
+                    }
+                    return;
+                }
+                if (msg?.type === 'prompt_session') {
+                    const sessionId = String(msg.sessionId || '');
+                    const promptId = String(msg.promptId || randomUUID());
+                    const text = typeof msg.text === 'string' ? msg.text : '';
+                    const session = sessions.get(sessionId);
+                    if (!session) {
+                        send({
+                            type: 'prompt_result',
+                            sessionId,
+                            promptId,
+                            ok: false,
+                            error: 'session not found',
+                            ts: Date.now(),
+                        });
+                        return;
+                    }
+                    counters.promptsSubmitted += 1;
+                    void session.submitPrompt(promptId, text);
+                    return;
+                }
+                if (msg?.type === 'permission_response') {
+                    const sessionId = String(msg.sessionId || '');
+                    const requestId = String(msg.requestId || '');
+                    const optionId = typeof msg.optionId === 'string' ? msg.optionId : undefined;
+                    const cancelled = msg.cancelled === true;
+                    const session = sessions.get(sessionId);
+                    if (!session || !requestId)
+                        return;
+                    session.resolvePermission(requestId, optionId, cancelled);
+                    return;
+                }
+                if (msg?.type === 'cancel_session_prompt') {
+                    const sessionId = String(msg.sessionId || '');
+                    const session = sessions.get(sessionId);
+                    if (!session) {
+                        send({
+                            type: 'prompt_result',
+                            sessionId,
+                            ok: false,
+                            error: 'session not found',
+                            ts: Date.now(),
+                        });
+                        return;
+                    }
+                    try {
+                        await session.cancelPrompt();
+                    }
+                    catch (error) {
+                        send({
+                            type: 'prompt_result',
+                            sessionId,
+                            ok: false,
+                            error: error?.message || String(error),
+                            ts: Date.now(),
+                        });
                     }
                     return;
                 }
                 if (msg?.type === 'stop_session') {
                     const sessionId = String(msg.sessionId || '');
-                    const ps = sessions.get(sessionId);
-                    if (!ps) {
-                        ws.send(JSON.stringify({
+                    const session = sessions.get(sessionId);
+                    if (!session) {
+                        send({
                             type: 'stop_session_result',
                             ok: false,
                             sessionId,
                             error: 'session not found',
                             ts: Date.now(),
-                        }));
+                        });
                         return;
                     }
-                    killPty(ps);
-                    ws.send(JSON.stringify({ type: 'stop_session_result', ok: true, sessionId, ts: Date.now() }));
-                    return;
-                }
-                if (msg?.type === 'snapshot') {
-                    ws.send(JSON.stringify({
-                        type: 'snapshot_result',
-                        ok: false,
-                        requestId: msg?.requestId,
-                        sessionId: msg?.sessionId,
-                        error: 'snapshot deprecated; use pty streaming',
+                    await session.stop();
+                    sessions.delete(sessionId);
+                    send({
+                        type: 'stop_session_result',
+                        ok: true,
+                        sessionId,
                         ts: Date.now(),
-                    }));
+                    });
                     return;
                 }
-                if (msg?.type === 'pty_input') {
-                    const sessionId = String(msg.sessionId || '');
-                    const input = typeof msg.data === 'string' ? msg.data : '';
-                    const ps = sessions.get(sessionId);
-                    if (ps && input)
-                        ps.pty.write(input);
-                    return;
-                }
-                if (msg?.type === 'pty_resize') {
-                    const sessionId = String(msg.sessionId || '');
-                    const cols = Number(msg.cols || 120);
-                    const rows = Number(msg.rows || 34);
-                    const ps = sessions.get(sessionId);
-                    if (ps)
-                        resizePty(ps, cols, rows);
-                    return;
-                }
-                logDebug('msg', msg);
             });
             await new Promise((resolve) => {
                 ws.once('close', () => resolve());
@@ -480,6 +429,14 @@ async function connectLoop() {
         }
         catch (e) {
             logWarn('connect loop error', e?.message || e);
+        }
+        finally {
+            activeWs = null;
+        }
+        if (closeCode === 1008) {
+            logError('unauthorized — token revoked, re-enroll needed');
+            await stopAllSessions();
+            process.exit(1);
         }
         const backoff = Math.min(15000, 500 + attempt * 500);
         await sleep(backoff);
